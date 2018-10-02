@@ -205,6 +205,8 @@ function build_wheel() {
   TMPDIR="$1"
   DEST="$2"
   PKG_NAME_FLAG="$3"
+  TAG_FLAG="$4"
+  ADD_TENSORBOARD_FLAG="$5"
 
   # Before we leave the top-level directory, make sure we know how to
   # call python.
@@ -216,7 +218,7 @@ function build_wheel() {
 
   rm -f MANIFEST
   echo $(date) : "=== Building wheel"
-  "${PYTHON_BIN_PATH:-python}" setup.py bdist_wheel ${PKG_NAME_FLAG} >/dev/null
+  "${PYTHON_BIN_PATH:-python}" setup.py bdist_wheel ${PKG_NAME_FLAG} ${TAG_FLAG} ${ADD_TENSORBOARD_FLAG} >/dev/null
   mkdir -p ${DEST}
   cp dist/* ${DEST}
   popd > /dev/null
@@ -241,6 +243,8 @@ function usage() {
   echo "    --gpudirect           build tensorflow_gpudirect"
   echo "    --rocm                build tensorflow_rocm"
   echo "    --nightly_flag        build tensorflow nightly"
+  echo "    --no_tensorboard      drops tensorboard dependency"
+  echo "    --tag <tag>           add local version label"
   echo ""
   exit 1
 }
@@ -255,6 +259,8 @@ function main() {
   SRCDIR=""
   DSTDIR=""
   CLEANSRC=1
+  ADD_TENSORBOARD=1
+  TAG=""
   while true; do
     if [[ "$1" == "--help" ]]; then
       usage
@@ -289,6 +295,14 @@ function main() {
     elif [[ "$1" == "--dst" ]]; then
       shift
       DSTDIR="$(real_path $1)"
+    elif [[ "$1" == "--no_tensorboard" ]]; then
+      ADD_TENSORBOARD=0
+    elif [[ "$1" == "--tag" ]]; then
+      shift
+      if [[ -z "$1" ]]; then
+        break
+      fi
+      TAG="$1"
     else
       DSTDIR="$(real_path $1)"
     fi
@@ -335,7 +349,10 @@ function main() {
     PKG_NAME_FLAG="--project_name tensorflow_cpu"
   fi
 
-  build_wheel "$SRCDIR" "$DSTDIR" "$PKG_NAME_FLAG"
+  TAG_FLAG="--tag ${TAG}"
+  ADD_TENSORBOARD_FLAG="--add_tensorboard ${ADD_TENSORBOARD}"
+
+  build_wheel "$SRCDIR" "$DSTDIR" "$PKG_NAME_FLAG" "$TAG_FLAG" "$ADD_TENSORBOARD_FLAG"
 
   if [[ $CLEANSRC -ne 0 ]]; then
     rm -rf "${TMPDIR}"

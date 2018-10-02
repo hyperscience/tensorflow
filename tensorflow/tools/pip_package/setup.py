@@ -62,11 +62,18 @@ REQUIRED_PACKAGES = [
     'opt_einsum >= 2.3.2',
     'six >= 1.10.0',
     'protobuf >= 3.6.1',
-    'tensorboard >= 1.15.0, < 1.16.0',
     'tensorflow-estimator == 1.15.1',
     'termcolor >= 1.1.0',
     'wrapt >= 1.11.1',
 ]
+
+if '--add_tensorboard' in sys.argv:
+  add_tensorboard_idx = sys.argv.index('--add_tensorboard')
+  add_tensorboard = sys.argv[add_tensorboard_idx + 1] == '1'
+  sys.argv.pop(add_tensorboard_idx)
+  sys.argv.pop(add_tensorboard_idx)
+  if add_tensorboard:
+    REQUIRED_PACKAGES.append('tensorboard >= 1.13.0, < 1.14.0')
 
 if sys.byteorder == 'little':
   # grpcio does not build correctly on big-endian machines due to lack of
@@ -80,6 +87,13 @@ if '--project_name' in sys.argv:
   project_name = sys.argv[project_name_idx + 1]
   sys.argv.remove('--project_name')
   sys.argv.pop(project_name_idx)
+
+project_tag = ''
+if '--tag' in sys.argv:
+  project_tag_idx = sys.argv.index('--tag')
+  project_tag = '+{}'.format(sys.argv[project_tag_idx + 1])
+  sys.argv.pop(project_tag_idx)
+  sys.argv.pop(project_tag_idx)
 
 # python3 requires wheel 0.26
 if sys.version_info.major == 3:
@@ -256,7 +270,7 @@ headers = (
 
 setup(
     name=project_name,
-    version=_VERSION.replace('-', ''),
+    version=_VERSION.replace('-', '') + project_tag,
     description=DOCLINES[0],
     long_description='\n'.join(DOCLINES[2:]),
     url='https://www.tensorflow.org/',
