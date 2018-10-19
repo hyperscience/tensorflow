@@ -234,8 +234,8 @@ class Conv2DFwdFactory : public DnnOpFactory<T> {
 
      if (conv2d_fwd == nullptr) {
        conv2d_fwd = new Conv2DFwd<T>(convFwdDims);
-       Conv2DFwdFactory<T>::GetInstance().SetConv2DFwd(
-           convFwdDims, conv2d_fwd);
+       //Conv2DFwdFactory<T>::GetInstance().SetConv2DFwd(
+       //    convFwdDims, conv2d_fwd);
      }
      return conv2d_fwd;
   }
@@ -878,6 +878,11 @@ class MklConv2DOp : public OpKernel {
         conv2d_fwd->Execute(src_data, filter_data, bias_data, dst_data);
       } else {
         conv2d_fwd->Execute(src_data, filter_data, dst_data);
+      }
+
+      if (conv2d_fwd) {
+        delete conv2d_fwd;
+        conv2d_fwd = nullptr;
       }
     } catch (mkldnn::error &e) {
       string error_msg = "Status: " + std::to_string(e.status) +
