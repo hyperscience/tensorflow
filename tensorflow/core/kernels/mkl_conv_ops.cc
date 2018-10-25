@@ -432,24 +432,23 @@ class MklConvFwdPrimitive : public MklPrimitive {
 template <typename Tinput, typename Tfilter, typename Tbias, typename Toutput>
 class MklConvFwdPrimitiveFactory : public MklPrimitiveFactory<float> {
  public:
-  static MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>* Get(
+  static std::shared_ptr<MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>> Get(
       const MklConvFwdParams& convFwdDims, bool do_not_cache) {
-    MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>* conv_fwd = nullptr;
+    std::shared_ptr<MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>> conv_fwd(nullptr);
 
     if (do_not_cache) {
       // Always create a new primitive
-      conv_fwd =
-          new MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>(convFwdDims);
+      conv_fwd.reset(new MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>(convFwdDims));
     } else {
       // Try to find a suitable one in pool
-      conv_fwd =
-          dynamic_cast<MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>*>(
-              MklConvFwdPrimitiveFactory<Tinput, Tfilter, Tbias,
-                                         Toutput>::GetInstance()
-                  .GetConvFwd(convFwdDims));
-      if (conv_fwd == nullptr) {
-        conv_fwd = new MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>(
-            convFwdDims);
+      conv_fwd = std::static_pointer_cast<
+          MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>>(
+          MklConvFwdPrimitiveFactory<T, Tinput, Tfilter, Tbias,
+                                     Toutput>::GetInstance()
+            .GetConvFwd(convFwdDims));
+      if (!conv_fwd) {
+        conv_fwd.reset(new MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>(
+            convFwdDims));
         MklConvFwdPrimitiveFactory<Tinput, Tfilter, Tbias,
                                    Toutput>::GetInstance()
             .SetConvFwd(convFwdDims, conv_fwd);
@@ -502,12 +501,12 @@ class MklConvFwdPrimitiveFactory : public MklPrimitiveFactory<float> {
     return key_creator.GetKey();
   }
 
-  MklPrimitive* GetConvFwd(const MklConvFwdParams& convFwdDims) {
+  std::shared_ptr<MklPrimitive> GetConvFwd(const MklConvFwdParams& convFwdDims) {
     string key = CreateKey(convFwdDims);
     return this->GetOp(key);
   }
 
-  void SetConvFwd(const MklConvFwdParams& convFwdDims, MklPrimitive* op) {
+  void SetConvFwd(const MklConvFwdParams& convFwdDims, std::shared_ptr<MklPrimitive> op) {
     string key = CreateKey(convFwdDims);
     this->SetOp(key, op);
   }
@@ -743,10 +742,10 @@ class MklConvOp : public OpKernel {
            IsConv1x1StrideNot1(filter_dims, strides));
 
       // Get a conv2d fwd from primitive pool
-      MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Ttemp_output>* conv_fwd =
-          nullptr;
-      memory::dims bias_dims = {};
+      std::shared_ptr<MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Ttemp_output>>
+          conv_fwd(nullptr);
       if (fuse_biasadd_) {
+        memory::dims bias_dims = {};
         conv_utl.GetBiasSizeInMklOrder(kInputIndex_Bias, &bias_dims);
       }
       MklConvFwdParams convFwdDims(
@@ -859,9 +858,6 @@ class MklConvOp : public OpKernel {
           stream(stream::kind::eager).submit(net).wait();
         }
       }
-
-      // Delete primitive since it is not cached.
-      if (do_not_cache) delete conv_fwd;
     } catch (mkldnn::error& e) {
       string error_msg = tensorflow::strings::StrCat(
           "Status: ", e.status, ", message: ", string(e.message), ", in file ",

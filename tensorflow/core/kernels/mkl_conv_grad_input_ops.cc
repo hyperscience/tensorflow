@@ -242,19 +242,19 @@ class MklConvBwdInputPrimitiveFactory : public MklPrimitiveFactory<T> {
   ~MklConvBwdInputPrimitiveFactory() {}
 
  public:
-  static MklConvBwdInputPrimitive<T>* Get(
+  static std::shared_ptr<MklConvBwdInputPrimitive<T>> Get(
       const MklConvBwdInputParams& convBwdInputDims, bool do_not_cache) {
-    MklConvBwdInputPrimitive<T>* conv_bwd_input = nullptr;
+    std::shared_ptr<MklConvBwdInputPrimitive<T>> conv_bwd_input(nullptr);
 
     if (do_not_cache) { /* Always allocate primitive */
-      conv_bwd_input = new MklConvBwdInputPrimitive<T>(convBwdInputDims);
+      conv_bwd_input.reset(new MklConvBwdInputPrimitive<T>(convBwdInputDims));
     } else {
       // look into the pool for reusable primitive
-      conv_bwd_input = dynamic_cast<MklConvBwdInputPrimitive<T>*>(
+      conv_bwd_input = std::static_pointer_cast<MklConvBwdInputPrimitive<T>>(
           MklConvBwdInputPrimitiveFactory<T>::GetInstance().GetConvBwdInput(
               convBwdInputDims));
-      if (conv_bwd_input == nullptr) {
-        conv_bwd_input = new MklConvBwdInputPrimitive<T>(convBwdInputDims);
+      if (!conv_bwd_input) {
+        conv_bwd_input.reset(new MklConvBwdInputPrimitive<T>(convBwdInputDims));
         MklConvBwdInputPrimitiveFactory<T>::GetInstance().SetConvBwdInput(
             convBwdInputDims, conv_bwd_input);
       }
@@ -283,13 +283,13 @@ class MklConvBwdInputPrimitiveFactory : public MklPrimitiveFactory<T> {
     return key_creator.GetKey();
   }
 
-  MklPrimitive* GetConvBwdInput(const MklConvBwdInputParams& convBwdInputDims) {
+  std::shared_ptr<MklPrimitive> GetConvBwdInput(const MklConvBwdInputParams& convBwdInputDims) {
     string key = CreateKey(convBwdInputDims);
     return this->GetOp(key);
   }
 
   void SetConvBwdInput(const MklConvBwdInputParams& convBwdInputDims,
-                       MklPrimitive* op) {
+                       std::shared_ptr<MklPrimitive> op) {
     string key = CreateKey(convBwdInputDims);
     this->SetOp(key, op);
   }
@@ -400,7 +400,6 @@ class MklConvCustomBackpropInputOp
               : memory::desc(diff_dst_dims, MklDnnType<T>(), tf_fmt);
       for (int i = 0; i < dilations.size(); i++) dilations[i] -= 1;
 
-      MklConvBwdInputPrimitive<T>* conv_bwd_input = nullptr;
       MklConvBwdInputParams convBwdInputDims(
           fwd_src_dims, fwd_filter_dims, diff_dst_dims, strides, dilations,
           padding_left, padding_right,
@@ -415,8 +414,9 @@ class MklConvCustomBackpropInputOp
       bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled() &&
                           (MklPrimitiveFactory<T>::IsLegacyPlatform() ||
                            IsConv1x1StrideNot1(fwd_filter_dims, strides));
-      conv_bwd_input = MklConvBwdInputPrimitiveFactory<T>::Get(convBwdInputDims,
-                                                               do_not_cache);
+      std::shared_ptr<MklConvBwdInputPrimitive<T>> conv_bwd_input =
+          MklConvBwdInputPrimitiveFactory<T>::Get(convBwdInputDims,
+                                                  do_not_cache);
       auto bwd_input_pd = conv_bwd_input->GetPrimitiveDesc();
 
       // allocate output tensor
@@ -482,11 +482,6 @@ class MklConvCustomBackpropInputOp
         net.push_back(
             mkldnn::reorder(reorder_pd, *tmp_data_mem, *dst_data_mem));
         stream(stream::kind::eager).submit(net).wait();
-      }
-
-      // delete primitive since it is not cached.
-      if (do_not_cache) {
-        delete conv_bwd_input;
       }
     } catch (mkldnn::error& e) {
       string error_msg = "Status: " + std::to_string(e.status) +
