@@ -51,7 +51,7 @@ namespace tensorflow {
 typedef Eigen::ThreadPoolDevice CPUDevice;
 
 /// utility classes enabling primitive reuse for backward conv ops.
-struct MklConvBwdInputParams {
+struct MklConvBwdInputParams : public MklPrimitiveParams {
   memory::dims diff_src_dims;
   memory::dims filter_dims;
   memory::dims diff_dst_dims;
@@ -70,6 +70,20 @@ struct MklConvBwdInputParams {
       diff_dst_dims(diff_dst_dims), strides(strides),
       dilations(dilations), padding_left(padding_left),
       padding_right(padding_right), padding(padding) {
+  }
+
+  string createKey() const {
+    string prefix = "conv_bwd_input";
+	FactoryKeyCreator key_creator;
+	key_creator.AddAsKey(prefix);
+	key_creator.AddAsKey(convBwdInputDims.diff_src_dims);
+	key_creator.AddAsKey(convBwdInputDims.filter_dims);
+	key_creator.AddAsKey(convBwdInputDims.diff_dst_dims);
+	key_creator.AddAsKey(convBwdInputDims.strides);
+	key_creator.AddAsKey(convBwdInputDims.dilations);
+	key_creator.AddAsKey(convBwdInputDims.padding_left);
+	key_creator.AddAsKey(convBwdInputDims.padding_right);
+	return key_creator.GetKey();
   }
 };
 
@@ -224,66 +238,6 @@ class MklConvBwdInputPrimitive : public MklPrimitive {
   engine cpu_engine_;
 };
 
-template <typename T>
-class MklConvBwdInputPrimitiveFactory : public MklPrimitiveFactory<T> {
- private:
-  MklConvBwdInputPrimitiveFactory() {}
-  ~MklConvBwdInputPrimitiveFactory() {}
-
- public:
-  static std::shared_ptr<MklConvBwdInputPrimitive<T>> Get(
-      const MklConvBwdInputParams& convBwdInputDims, bool do_not_cache) {
-    std::shared_ptr<MklConvBwdInputPrimitive<T>> conv_bwd_input(nullptr);
-
-    if (do_not_cache) { /* Always allocate primitive */
-      conv_bwd_input.reset(new MklConvBwdInputPrimitive<T>(convBwdInputDims));
-    } else {
-      // look into the pool for reusable primitive
-      conv_bwd_input = std::static_pointer_cast<MklConvBwdInputPrimitive<T>>(
-          MklConvBwdInputPrimitiveFactory<T>::GetInstance().GetConvBwdInput(
-              convBwdInputDims));
-      if (!conv_bwd_input) {
-        conv_bwd_input.reset(new MklConvBwdInputPrimitive<T>(convBwdInputDims));
-        MklConvBwdInputPrimitiveFactory<T>::GetInstance().SetConvBwdInput(
-            convBwdInputDims, conv_bwd_input);
-      }
-    }
-
-    return conv_bwd_input;
-  }
-
- private:
-  static MklConvBwdInputPrimitiveFactory& GetInstance() {
-    static MklConvBwdInputPrimitiveFactory instance_;
-    return instance_;
-  }
-
-  static string CreateKey(const MklConvBwdInputParams& convBwdInputDims) {
-    string prefix = "conv_bwd_input";
-    FactoryKeyCreator key_creator;
-    key_creator.AddAsKey(prefix);
-    key_creator.AddAsKey(convBwdInputDims.diff_src_dims);
-    key_creator.AddAsKey(convBwdInputDims.filter_dims);
-    key_creator.AddAsKey(convBwdInputDims.diff_dst_dims);
-    key_creator.AddAsKey(convBwdInputDims.strides);
-    key_creator.AddAsKey(convBwdInputDims.dilations);
-    key_creator.AddAsKey(convBwdInputDims.padding_left);
-    key_creator.AddAsKey(convBwdInputDims.padding_right);
-    return key_creator.GetKey();
-  }
-
-  std::shared_ptr<MklPrimitive> GetConvBwdInput(const MklConvBwdInputParams& convBwdInputDims) {
-    string key = CreateKey(convBwdInputDims);
-    return this->GetOp(key);
-  }
-
-  void SetConvBwdInput(const MklConvBwdInputParams& convBwdInputDims,
-                       std::shared_ptr<MklPrimitive> op) {
-    string key = CreateKey(convBwdInputDims);
-    this->SetOp(key, op);
-  }
-};
-
 template <typename Device, class T>
 class MklConvCustomBackpropInputOp : public MklConvBackpropCommonOp<Device, T> {
  public:
@@ -394,12 +348,11 @@ class MklConvCustomBackpropInputOp : public MklConvBackpropCommonOp<Device, T> {
       // in the following cases
       //   1. Legacy CPU without AVX512/AVX2, or
       //   2. 1x1 convolution with stride != 1
-      bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled() &&
-                   (MklPrimitiveFactory<T>::IsLegacyPlatform() ||
-                    IsConv1x1StrideNot1(fwd_filter_dims, strides));
-      std::shared_ptr<MklConvBwdInputPrimitive<T>> conv_bwd_input =
-          MklConvBwdInputPrimitiveFactory<T>::Get(convBwdInputDims,
-                                                  do_not_cache);
+      bool do_not_cache = IsPrimitiveMemOptEnabled() &&
+    		              (IsLegacyPlatform() || IsConv1x1StrideNot1(fwd_filter_dims, strides));
+      std::shared_ptr<MklConvBwdInputPrimitive<T>> conv_bwd_input(nullptr);
+      MklPrimitiveFactory<MklConvBwdInputPrimitive<T>, MklConvBwdInputParams>::Get(convBwdInputDims, conv_bwd_input, !do_not_cache);
+
       auto bwd_input_pd = conv_bwd_input->GetPrimitiveDesc();
 
       // allocate output tensor

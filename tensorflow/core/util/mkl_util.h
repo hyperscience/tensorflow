@@ -1583,30 +1583,179 @@ inline memory::desc CreateBlockedMemDescHelper(const memory::dims& dim,
   return memory::desc(md);
 }
 
-/// Base class for operations with reuse of primitives
+/// Function to decide whether HW has AVX512 or AVX2.
+/// For those legacy device(w/o AVX512 and AVX2),
+/// MKL-DNN GEMM will be used.
+inline bool IsLegacyPlatform() {
+	return (!port::TestCPUFeature(port::CPUFeature::AVX512F) &&
+	        !port::TestCPUFeature(port::CPUFeature::AVX2));
+}
+
+/// Fuction to check whether primitive memory optimization is enabled
+inline bool IsPrimitiveMemOptEnabled() {
+	bool is_primitive_mem_opt_enabled = true;
+	TF_CHECK_OK(ReadBoolFromEnvVar("TF_MKL_OPTIMIZE_PRIMITIVE_MEMUSE", true,
+	                               &is_primitive_mem_opt_enabled));
+	return is_primitive_mem_opt_enabled;
+}
+
+/// Function to check whether primitive memory reuse is enabled.
+// TODO(mavrov): See if it is OK to save the environment variable value.
+inline bool IsPrimitiveMemReuseEnabled() {
+	bool is_primitive_mem_reuse_enabled = true;
+	TF_CHECK_OK(ReadBoolFromEnvVar("TF_MKL_REUSE_PRIMITIVE_MEMORY", true,
+	                               &is_primitive_mem_reuse_enabled));
+	return is_primitive_mem_reuse_enabled;
+}
+
+/// Base class for the parameters of operations with reuse of primitives.
+///
+class MklPrimitiveParams {
+
+public:
+	string createKey() const;
+};
+
+/// Base class for operations with reuse of primitives.
 ///
 class MklPrimitive {
- public:
-  virtual ~MklPrimitive() {}
 
-  // Dummy data which MKL DNN never operates on
-  unsigned char* DummyData = nullptr;
+public:
+	// Dummy data which MKL DNN never operates on
+	static const unsigned char* const DummyData = nullptr;
+};
+
+/// A factory that takes care of the primitive recycling.
+///
+/// This can be turned off by setting TF_MKL_REUSE_PRIMITIVE_MEMORY to 0.
+template <typename Primitive, typename PrimitiveParameters>
+class MklPrimitiveFactory {
+
+public:
+	static void Get(const PrimitiveParameters& parameters,
+			        std::shared_ptr<Primitive>& primitive, bool useCache = true) {
+		// TODO(mavrov): See if we can reuse key from the parameters class itself.
+		string key;
+
+		bool shouldUseCache = IsPrimitiveMemReuseEnabled() && useCache;
+		if (shouldUseCache) {
+			key = parameters.createKey();
+			GetPrimitive(key, primitive);
+		}
+
+		if (!primitive) {
+			primitive.reset(new Primitive(parameters));
+
+			if (shouldUseCache) {
+				SetPrimitive(key, primitive);
+			}
+		}
+	}
+
+private:
+	static inline std::unordered_map<string, std::shared_ptr<Primitive>>& GetCache() {
+		static thread_local std::unordered_map<string, std::shared_ptr<Primitive>> cache;
+		return cache;
+	}
+
+	static void GetPrimitive(const string& key, std::shared_ptr<Primitive>& primitive) {
+		auto& cache = GetCache();
+		auto cacheIter = cache.find(key);
+		if (cacheIter == cache.end()) {
+			primitive.reset(nullptr);
+		} else {
+			CHECK(cacheIter->second != nullptr) << "nullptr present in MKL primitive cache";
+			primitive = cacheIter->second;
+		}
+	}
+
+	static void SetPrimitive(const string& key, const std::shared_ptr<Primitive>& primitive) {
+		auto& cache = GetCache();
+		auto cacheIter = cache.find(key);
+
+		CHECK(cacheIter == map.end());
+
+		map[key] = primitive;
+	}
+};
+
+// utility class for creating keys of MKL primitive pool.
+class FactoryKeyCreator {
+ public:
+  FactoryKeyCreator() {
+    key_.reserve(kMaxKeyLength);
+  }
+
+  ~FactoryKeyCreator() {}
+
+  void AddAsKey(const string& str) { Append(str); }
+
+  void AddAsKey(const mkldnn::memory::dims &dims) {
+    for (unsigned int i = 0; i < dims.size(); i++) {
+      AddAsKey<int>(dims[i]);
+    }
+  }
+
+  template <typename T>
+  void AddAsKey(const T data) {
+    auto buffer = reinterpret_cast<const char *>(&data);
+    Append(StringPiece(buffer, sizeof(T)));
+  }
+
+  string GetKey() { return key_; }
+
+ private:
+  string key_;
+  const char delimiter = 'x';
+  const int kMaxKeyLength = 256;
+  void Append(StringPiece s) {
+    key_.append(string(s));
+    key_.append(1, delimiter);
+  }
+};
+
+struct MklReorderParams : public MklPrimitiveParams {
+	const memory* from;
+	const memory* to;
+
+	MklReorderParams(const memory* from, const memory* to)
+		: from(from), to(to) {
+	}
+
+	// TODO(mavrov): See if it is OK to cache the key as a private member
+    string createKey() const {
+    	string prefix = "reorder";
+    	FactoryKeyCreator key_creator;
+    	auto const &from_desc =  from->get_primitive_desc().desc().data;
+    	auto const &to_desc =  to->get_primitive_desc().desc().data;
+    	memory::dims from_dims(from_desc.dims, &from_desc.dims[from_desc.ndims]);
+    	memory::dims to_dims(to_desc.dims, &to_desc.dims[to_desc.ndims]);
+    	key_creator.AddAsKey(prefix);
+    	key_creator.AddAsKey(static_cast<int>(from_desc.format));
+    	key_creator.AddAsKey(static_cast<int>(from_desc.data_type));
+    	key_creator.AddAsKey(from_dims);
+    	key_creator.AddAsKey(static_cast<int>(to_desc.format));
+    	key_creator.AddAsKey(static_cast<int>(to_desc.data_type));
+    	key_creator.AddAsKey(to_dims);
+    	return key_creator.GetKey();
+    }
 };
 
 class MklReorderPrimitive : public MklPrimitive {
  public:
-  explicit MklReorderPrimitive(const memory* from, const memory* to) {
-    Setup(from, to);
+  explicit MklReorderPrimitive(const MklReorderParams& params) {
+    Setup(params.from, params.to);
   }
+
     ~MklReorderPrimitive() {}
 
     std::shared_ptr<primitive> GetPrimitive() {
       return context_.reorder_prim;
     }
 
-    void SetMemory(const memory* from, const memory* to) {
-      context_.src_mem->set_data_handle(from->get_data_handle());
-      context_.dst_mem->set_data_handle(to->get_data_handle());
+    void SetMemory(const MklReorderParams& params) {
+      context_.src_mem->set_data_handle(params.from->get_data_handle());
+      context_.dst_mem->set_data_handle(params.to->get_data_handle());
     }
 
  private:
@@ -1631,8 +1780,21 @@ class MklReorderPrimitive : public MklPrimitive {
     }
 };
 
-template <typename T>
-inline std::shared_ptr<MklReorderPrimitive> FindOrCreateReorder(const memory* from, const memory* to);
+/// Fuction to find(or create) a reorder from memory pointed by
+/// from to memory pointed by to, it will created primitive or
+/// get primitive from pool if it is cached.
+/// Returns the primitive.
+inline void FindOrCreateReorder(const memory* from, const memory* to,
+		                        std::shared_ptr<MklReorderPrimitive>& reorderPrimitive) {
+	CHECK_NOTNULL(from);
+	CHECK_NOTNULL(to);
+
+	MklReorderParams reorderParameters(from, to);
+	MklPrimitiveFactory<MklReorderPrimitive, MklReorderParams>::Get(
+			reorderParameters, reorderPrimitive);
+
+	reorderPrimitive->SetMemory(reorderParameters);
+}
 
 /*
  * Class to represent all the resources corresponding to a tensor in TensorFlow
@@ -1907,7 +2069,8 @@ class MklDnnData {
       // primitive reuse don't allow two same reorder prim in
       // one stream, so submit it immediately
       reorder_memory_ = new memory(op_pd);
-      std::shared_ptr<MklReorderPrimitive> reorder_primitive = FindOrCreateReorder<T>(user_memory_, reorder_memory_);
+      std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
+      FindOrCreateReorder<T>(user_memory_, reorder_memory_, reorder_primitive);
       std::vector<primitive> net;
       net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
@@ -1953,7 +2116,8 @@ class MklDnnData {
       // primitive reuse don't allow two same reorder prim in
       // one stream, so submit it immediately
       reorder_memory_ = new memory(op_pd, reorder_data_handle);
-      std::shared_ptr<MklReorderPrimitive> reorder_primitive = FindOrCreateReorder<T>(user_memory_, reorder_memory_);
+      std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
+      FindOrCreateReorder<T>(user_memory_, reorder_memory_, reorder_primitive);
       std::vector<primitive> net;
       net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
@@ -2034,7 +2198,8 @@ class MklDnnData {
     CHECK_NOTNULL(reorder_memory_);
     // primitive reuse don't allow two same reorder prim in
     // one stream, so submit it immediately
-    std::shared_ptr<MklReorderPrimitive> reorder_primitive = FindOrCreateReorder<T>(reorder_memory_, user_memory_);
+    std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
+    FindOrCreateReorder<T>(reorder_memory_, user_memory_, reorder_primitive);
     std::vector<primitive> net;
     net.push_back(*reorder_primitive->GetPrimitive());
     stream(stream::kind::eager).submit(net).wait();
@@ -2042,109 +2207,6 @@ class MklDnnData {
 };
 
 const mkldnn::memory::dims NONE_DIMS = {};
-
-template <typename T>
-class MklPrimitiveFactory {
- public:
-  MklPrimitiveFactory() {
-  }
-
-  ~MklPrimitiveFactory() {}
-
-  std::shared_ptr<MklPrimitive> GetOp(const string& key) {
-    if (!IsPrimitiveMemReuseEnabled()) {
-      return nullptr;
-    }
-
-    auto& map = MklPrimitiveFactory<T>::GetHashMap();
-    auto stream_iter = map.find(key);
-    if (stream_iter == map.end()) {
-      return nullptr;
-    } else {
-      CHECK(stream_iter->second != nullptr) << "nullptr present in map";
-      return stream_iter->second;
-    }
-  }
-
-  void SetOp(const string& key, std::shared_ptr<MklPrimitive> op) {
-    if (!IsPrimitiveMemReuseEnabled()) {
-      return;
-    }
-
-    auto& map = MklPrimitiveFactory<T>::GetHashMap();
-    auto stream_iter = map.find(key);
-
-    CHECK(stream_iter == map.end());
-
-    map[key] = op;
-  }
-
-  /// Function to decide whether HW has AVX512 or AVX2
-  /// For those legacy device(w/o AVX512 and AVX2),
-  /// MKL-DNN GEMM will be used.
-  static inline bool IsLegacyPlatform() {
-    return (!port::TestCPUFeature(port::CPUFeature::AVX512F)
-                   && !port::TestCPUFeature(port::CPUFeature::AVX2));
-  }
-
-  /// Fuction to check whether primitive memory optimization is enabled
-  static inline bool IsPrimitiveMemOptEnabled() {
-    bool is_primitive_mem_opt_enabled = true;
-    TF_CHECK_OK(ReadBoolFromEnvVar("TF_MKL_OPTIMIZE_PRIMITIVE_MEMUSE", true,
-                                   &is_primitive_mem_opt_enabled));
-    return is_primitive_mem_opt_enabled;
-  }
-
-  /// Function to check whether primitive memory reuse is enabled
-  static inline bool IsPrimitiveMemReuseEnabled() {
-    bool is_primitive_mem_reuse_enabled = true;
-    TF_CHECK_OK(ReadBoolFromEnvVar("TF_MKL_REUSE_PRIMITIVE_MEMORY", true,
-                                   &is_primitive_mem_reuse_enabled));
-    return is_primitive_mem_reuse_enabled;
-  }
-
- private:
-  static inline std::unordered_map<string, std::shared_ptr<MklPrimitive>>& GetHashMap() {
-    static thread_local std::unordered_map<string, std::shared_ptr<MklPrimitive>> map_;
-    return map_;
-  }
-};
-
-// utility class for creating keys of MKL primitive pool.
-class FactoryKeyCreator {
- public:
-  FactoryKeyCreator() {
-    key_.reserve(kMaxKeyLength);
-  }
-
-  ~FactoryKeyCreator() {}
-
-  void AddAsKey(const string& str) { Append(str); }
-
-  void AddAsKey(const mkldnn::memory::dims &dims) {
-    for (unsigned int i = 0; i < dims.size(); i++) {
-      AddAsKey<int>(dims[i]);
-    }
-  }
-
-  template <typename T>
-  void AddAsKey(const T data) {
-    auto buffer = reinterpret_cast<const char *>(&data);
-    Append(StringPiece(buffer, sizeof(T)));
-  }
-
-  string GetKey() { return key_; }
-
- private:
-  string key_;
-  const char delimiter = 'x';
-  const int kMaxKeyLength = 256;
-  void Append(StringPiece s) {
-    key_.append(string(s));
-    key_.append(1, delimiter);
-  }
-};
-
 
 static inline memory::format get_desired_format(int channel,
                                                 bool is_2d = true) {
@@ -2160,70 +2222,6 @@ static inline memory::format get_desired_format(int channel,
     fmt_desired = is_2d ? memory::format::nchw : memory::format::ncdhw;
   }
   return fmt_desired;
-}
-
-template <typename T>
-class MklReorderPrimitiveFactory : public MklPrimitiveFactory<T> {
- public:
-  static std::shared_ptr<MklReorderPrimitive> Get(const memory* from, const memory* to) {
-    std::shared_ptr<MklReorderPrimitive> reorderPrim =
-    	std::static_pointer_cast<MklReorderPrimitive>(
-    		MklReorderPrimitiveFactory<T>::GetInstance().GetReorder(from, to));
-    if (!reorderPrim) {
-      reorderPrim.reset(new MklReorderPrimitive(from, to));
-      MklReorderPrimitiveFactory<T>::GetInstance().SetReorder(from, to,
-                                                              reorderPrim);
-    }
-    reorderPrim->SetMemory(from, to);
-    return reorderPrim;
-  }
-
-    static MklReorderPrimitiveFactory & GetInstance() {
-      static MklReorderPrimitiveFactory instance_;
-      return instance_;
-    }
-
- private:
-    MklReorderPrimitiveFactory() {}
-    ~MklReorderPrimitiveFactory() {}
-
-    static string CreateKey(const memory* from, const memory* to) {
-      string prefix = "reorder";
-      FactoryKeyCreator key_creator;
-      auto const &from_desc =  from->get_primitive_desc().desc().data;
-      auto const &to_desc =  to->get_primitive_desc().desc().data;
-      memory::dims from_dims(from_desc.dims, &from_desc.dims[from_desc.ndims]);
-      memory::dims to_dims(to_desc.dims, &to_desc.dims[to_desc.ndims]);
-      key_creator.AddAsKey(prefix);
-      key_creator.AddAsKey(static_cast<int>(from_desc.format));
-      key_creator.AddAsKey(static_cast<int>(from_desc.data_type));
-      key_creator.AddAsKey(from_dims);
-      key_creator.AddAsKey(static_cast<int>(to_desc.format));
-      key_creator.AddAsKey(static_cast<int>(to_desc.data_type));
-      key_creator.AddAsKey(to_dims);
-      return key_creator.GetKey();
-    }
-
-    std::shared_ptr<MklPrimitive> GetReorder(const memory* from, const memory* to) {
-      string key = CreateKey(from, to);
-      return this->GetOp(key);
-    }
-
-    void SetReorder(const memory* from, const memory* to, std::shared_ptr<MklPrimitive> op) {
-      string key = CreateKey(from, to);
-      this->SetOp(key, op);
-    }
-};
-
-/// Fuction to find(or create) a reorder from memory pointed by
-/// from to memory pointed by to, it will created primitive or
-/// get primitive from pool if it is cached.
-/// Returns the primitive.
-template <typename T>
-inline std::shared_ptr<MklReorderPrimitive> FindOrCreateReorder(const memory* from, const memory* to) {
-  CHECK_NOTNULL(from);
-  CHECK_NOTNULL(to);
-  return MklReorderPrimitiveFactory<T>::Get(from, to);
 }
 
 // utility function to determine if it is conv 1x1 and stride != 1
