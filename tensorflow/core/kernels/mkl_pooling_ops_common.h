@@ -42,7 +42,7 @@ using mkldnn::pooling_avg_include_padding;
 using mkldnn::pooling_max;
 using mkldnn::prop_kind;
 
-struct MklPoolingParams {
+struct MklPoolingParams : public MklPrimitiveParams {
   memory::dims src_dims;
   memory::dims dst_dims;
   memory::dims filter_dims;
@@ -62,6 +62,20 @@ struct MklPoolingParams {
         padding_left(padding_left),
         padding_right(padding_right),
         alg_kind(alg_kind) {}
+
+  string createKey() const {
+	  string prefix = "pooling_fwd";
+	  FactoryKeyCreator key_creator;
+	  key_creator.AddAsKey(prefix);
+	  key_creator.AddAsKey(src_dims);
+	  key_creator.AddAsKey(dst_dims);
+	  key_creator.AddAsKey(filter_dims);
+	  key_creator.AddAsKey(strides);
+	  key_creator.AddAsKey(padding_left);
+	  key_creator.AddAsKey(padding_right);
+	  key_creator.AddAsKey<int>(static_cast<int>(alg_kind));
+	  return key_creator.GetKey();
+  }
 };
 
 template <typename T>
@@ -142,62 +156,6 @@ class MklPoolingFwdPrimitive : public MklPrimitive {
 
   struct PoolingFwdContext context_;
   engine cpu_engine_;
-};
-
-template <typename T>
-class MklPoolingFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
- public:
-  static std::shared_ptr<MklPoolingFwdPrimitive<T>> Get(const MklPoolingParams& fwdParams) {
-    // Get pooling primitive from the pool
-    std::shared_ptr<MklPoolingFwdPrimitive<T>> pooling_forward =
-      std::static_pointer_cast<MklPoolingFwdPrimitive<T>>(
-        MklPoolingFwdPrimitiveFactory<T>::GetInstance().GetPoolingFwd(fwdParams));
-
-    if (!pooling_forward) {
-      pooling_forward.reset(new MklPoolingFwdPrimitive<T>(fwdParams));
-      MklPoolingFwdPrimitiveFactory<T>::GetInstance().SetPoolingFwd(
-          fwdParams, pooling_forward);
-    }
-
-    return pooling_forward;
-  }
-
-  static MklPoolingFwdPrimitiveFactory& GetInstance() {
-    static MklPoolingFwdPrimitiveFactory instance_;
-    return instance_;
-  }
-
- private:
-  MklPoolingFwdPrimitiveFactory() {}
-  ~MklPoolingFwdPrimitiveFactory() {}
-
-  // The key to be created will be used to get/set pooling
-  // primitive op from reuse perspective.
-  // A pooling key is a string which concates key parameters
-  // as well as algorithm kind (max versus avg).
-  static string CreateKey(const MklPoolingParams& fwdParams) {
-    string prefix = "pooling_fwd";
-    FactoryKeyCreator key_creator;
-    key_creator.AddAsKey(prefix);
-    key_creator.AddAsKey(fwdParams.src_dims);
-    key_creator.AddAsKey(fwdParams.dst_dims);
-    key_creator.AddAsKey(fwdParams.filter_dims);
-    key_creator.AddAsKey(fwdParams.strides);
-    key_creator.AddAsKey(fwdParams.padding_left);
-    key_creator.AddAsKey(fwdParams.padding_right);
-    key_creator.AddAsKey<int>(static_cast<int>(fwdParams.alg_kind));
-    return key_creator.GetKey();
-  }
-
-  std::shared_ptr<MklPrimitive> GetPoolingFwd(const MklPoolingParams& fwdParams) {
-    string key = CreateKey(fwdParams);
-    return this->GetOp(key);
-  }
-
-  void SetPoolingFwd(const MklPoolingParams& fwdParams, std::shared_ptr<MklPrimitive> op) {
-    string key = CreateKey(fwdParams);
-    this->SetOp(key, op);
-  }
 };
 
 template <typename T>
@@ -292,63 +250,6 @@ class MklPoolingBwdPrimitive : public MklPrimitive {
 
   struct PoolingBwdContext context_;
   engine cpu_engine;
-};
-
-template <typename T>
-class MklPoolingBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
- public:
-  static std::shared_ptr<MklPoolingBwdPrimitive<T>> Get(const MklPoolingParams& bwdParams) {
-    // Find a pooling backward primitive from the pool
-	// If it does not exist, create a new one
-    std::shared_ptr<MklPoolingBwdPrimitive<T>> pooling_backward =
-      std::static_pointer_cast<MklPoolingBwdPrimitive<T>>(
-        MklPoolingBwdPrimitiveFactory<T>::GetInstance().GetPoolingBwd(bwdParams));
-
-    if (!pooling_backward) {
-      pooling_backward.reset(new MklPoolingBwdPrimitive<T>(bwdParams));
-      MklPoolingBwdPrimitiveFactory<T>::GetInstance().SetPoolingBwd(
-          bwdParams, pooling_backward);
-    }
-
-    return pooling_backward;
-  }
-
-  static MklPoolingBwdPrimitiveFactory& GetInstance() {
-    static MklPoolingBwdPrimitiveFactory instance_;
-    return instance_;
-  }
-
- private:
-  MklPoolingBwdPrimitiveFactory() {}
-  ~MklPoolingBwdPrimitiveFactory() {}
-
-  // The key to be created will be used to get/set pooling
-  // primitive op from reuse perspective.
-  // A pooling key is a string which concates key parameters
-  // as well as algorithm kind (max versus avg).
-  static string CreateKey(const MklPoolingParams& bwdParams) {
-    string prefix = "pooling_bwd";
-    FactoryKeyCreator key_creator;
-    key_creator.AddAsKey(prefix);
-    key_creator.AddAsKey(bwdParams.src_dims);
-    key_creator.AddAsKey(bwdParams.dst_dims);
-    key_creator.AddAsKey(bwdParams.filter_dims);
-    key_creator.AddAsKey(bwdParams.strides);
-    key_creator.AddAsKey(bwdParams.padding_left);
-    key_creator.AddAsKey(bwdParams.padding_right);
-    key_creator.AddAsKey<int>(static_cast<int>(bwdParams.alg_kind));
-    return key_creator.GetKey();
-  }
-
-  std::shared_ptr<MklPrimitive> GetPoolingBwd(const MklPoolingParams& bwdParams) {
-    string key = CreateKey(bwdParams);
-    return this->GetOp(key);
-  }
-
-  void SetPoolingBwd(const MklPoolingParams& bwdParams, std::shared_ptr<MklPrimitive> op) {
-    string key = CreateKey(bwdParams);
-    this->SetOp(key, op);
-  }
 };
 #endif
 
