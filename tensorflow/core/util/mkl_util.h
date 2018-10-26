@@ -1226,6 +1226,50 @@ inline memory::desc CreateBlockedMemDescHelper(const memory::dims& dim,
   return memory::desc(md);
 }
 
+/// Base class for operations with reuse of primitives
+///
+class MklPrimitive {
+ public:
+  virtual ~MklPrimitive() {}
+
+  // Dummy data which MKL DNN never operates on
+  unsigned char* DummyData = nullptr;
+};
+
+class MklReorderPrimitive : public MklPrimitive {
+ public:
+  explicit MklReorderPrimitive(const memory* from, const memory* to) {
+    Setup(from, to);
+  }
+  ~MklReorderPrimitive() {}
+
+  std::shared_ptr<primitive> GetPrimitive() { return context_.reorder_prim; }
+
+  void SetMemory(const memory* from, const memory* to) {
+    context_.src_mem->set_data_handle(from->get_data_handle());
+    context_.dst_mem->set_data_handle(to->get_data_handle());
+  }
+
+ private:
+  struct ReorderContext {
+    std::shared_ptr<mkldnn::memory> src_mem;
+    std::shared_ptr<mkldnn::memory> dst_mem;
+    std::shared_ptr<primitive> reorder_prim;
+    ReorderContext()
+        : src_mem(nullptr), dst_mem(nullptr), reorder_prim(nullptr) {}
+  } context_;
+
+  engine cpu_engine_ = engine(engine::cpu, 0);
+
+  void Setup(const memory* from, const memory* to) {
+    context_.src_mem.reset(new memory(
+        {from->get_primitive_desc().desc(), cpu_engine_}, DummyData));
+    context_.dst_mem.reset(
+        new memory({to->get_primitive_desc().desc(), cpu_engine_}, DummyData));
+    context_.reorder_prim = std::make_shared<mkldnn::reorder>(
+        reorder(*context_.src_mem, *context_.dst_mem));
+  }
+};
 inline void CreateAndExecuteReorder(const reorder::primitive_desc& reorder_desc,
                                     const memory& src_mem,
                                     const memory& dst_mem,
@@ -1246,8 +1290,6 @@ inline void CreateAndExecuteReorder(const reorder::primitive_desc& reorder_desc,
   stream(stream::kind::eager).submit(net).wait();
 #endif  // ENABLE_MKLDNN_V1
 }
-
-class MklReorderPrimitive;
 
 template <typename T>
 inline std::shared_ptr<MklReorderPrimitive> FindOrCreateReorder(const memory* from, const memory* to);
@@ -1577,7 +1619,7 @@ class MklDnnData {
       reorder_memory_ = new memory(op_pd);
       std::shared_ptr<MklReorderPrimitive> reorder_primitive = FindOrCreateReorder<T>(user_memory_, reorder_memory_);
       std::vector<primitive> net;
-      net.push_back(reorder_primitive->GetPrimitive());
+      net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
 #endif  // ENABLE_MKLDNN_V1
       return true;
@@ -1657,7 +1699,7 @@ class MklDnnData {
       reorder_memory_ = new memory(op_pd, reorder_data_handle);
       std::shared_ptr<MklReorderPrimitive> reorder_primitive = FindOrCreateReorder<T>(user_memory_, reorder_memory_);
       std::vector<primitive> net;
-      net.push_back(reorder_primitive->GetPrimitive());
+      net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
 #endif  // ENABLE_MKLDNN_V1
       return true;
@@ -1791,19 +1833,10 @@ class MklDnnData {
     }
     cpu_stream.wait();
 #else
-    net.push_back(reorder_primitive->GetPrimitive());
+    net.push_back(*reorder_primitive->GetPrimitive());
     stream(stream::kind::eager).submit(net).wait();
 #endif  // ENABLE_MKLDNN_V1
   }
-};
-
-/// Base class for operations with reuse of primitives
-class MklPrimitive {
- public:
-  virtual ~MklPrimitive() {}
-
-  // Dummy data which MKL DNN never operates on
-  unsigned char* DummyData = nullptr;
 };
 
 const mkldnn::memory::dims NONE_DIMS = {};
@@ -2017,41 +2050,6 @@ static inline MEMORY_FORMAT get_desired_format(int channel, bool is_2d = true) {
   }
   return fmt_desired;
 }
-
-class MklReorderPrimitive : public MklPrimitive {
- public:
-  explicit MklReorderPrimitive(const memory* from, const memory* to) {
-    Setup(from, to);
-  }
-  ~MklReorderPrimitive() {}
-
-  std::shared_ptr<primitive> GetPrimitive() { return context_.reorder_prim; }
-
-  void SetMemory(const memory* from, const memory* to) {
-    context_.src_mem->set_data_handle(from->get_data_handle());
-    context_.dst_mem->set_data_handle(to->get_data_handle());
-  }
-
- private:
-  struct ReorderContext {
-    std::shared_ptr<mkldnn::memory> src_mem;
-    std::shared_ptr<mkldnn::memory> dst_mem;
-    std::shared_ptr<primitive> reorder_prim;
-    ReorderContext()
-        : src_mem(nullptr), dst_mem(nullptr), reorder_prim(nullptr) {}
-  } context_;
-
-  engine cpu_engine_ = engine(ENGINE_CPU, 0);
-
-  void Setup(const memory* from, const memory* to) {
-    context_.src_mem.reset(
-        new MEMORY_CONSTRUCTOR_WITH_MEM_PD(from, cpu_engine_, DummyData));
-    context_.dst_mem.reset(
-        new MEMORY_CONSTRUCTOR_WITH_MEM_PD(to, cpu_engine_, DummyData));
-    context_.reorder_prim = std::make_shared<mkldnn::reorder>(
-        reorder(*context_.src_mem, *context_.dst_mem));
-  }
-};
 
 template <typename T>
 class MklReorderPrimitiveFactory : public MklPrimitiveFactory<T> {

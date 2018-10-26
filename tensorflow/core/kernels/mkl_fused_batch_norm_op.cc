@@ -225,7 +225,7 @@ class MklFusedBatchNormFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
   static std::shared_ptr<MklFusedBatchNormFwdPrimitive<T, U>> Get(
       const MklBatchNormFwdParams& fwdParams) {
     std::shared_ptr<MklFusedBatchNormFwdPrimitive<T>> bn_fwd =
-        std::pointer_static_cast<MklFusedBatchNormFwdPrimitive<T, U>>(
+        std::static_pointer_cast<MklFusedBatchNormFwdPrimitive<T, U>>(
             MklFusedBatchNormFwdPrimitiveFactory<T, U>::GetInstance()
                 .GetBatchNormFwd(fwdParams));
 
@@ -458,7 +458,7 @@ class MklFusedBatchNormBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
   static std::shared_ptr<MklFusedBatchNormBwdPrimitive<T, U>> Get(
       const MklBatchNormBwdParams& bwdParams) {
     std::shared_ptr<MklFusedBatchNormBwdPrimitive<T>> bn_bwd =
-        std::pointer_static_cast<MklFusedBatchNormBwdPrimitive<T, U>>(
+        std::static_pointer_cast<MklFusedBatchNormBwdPrimitive<T, U>>(
             MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance()
                 .GetBatchNormBwd(bwdParams));
 
