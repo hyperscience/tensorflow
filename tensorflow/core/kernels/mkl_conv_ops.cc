@@ -87,14 +87,14 @@ struct MklConvFwdParams : public MklPrimitiveParams {
     string prefix = "conv_fwd_";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(convFwdDims.src_dims);
-	key_creator.AddAsKey(convFwdDims.filter_dims);
-	key_creator.AddAsKey(convFwdDims.bias_dims);
-	key_creator.AddAsKey(convFwdDims.dst_dims);
-	key_creator.AddAsKey(convFwdDims.strides);
-	key_creator.AddAsKey(convFwdDims.dilations);
-	key_creator.AddAsKey(convFwdDims.padding_left);
-	key_creator.AddAsKey(convFwdDims.padding_right);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(filter_dims);
+	key_creator.AddAsKey(bias_dims);
+	key_creator.AddAsKey(dst_dims);
+	key_creator.AddAsKey(strides);
+	key_creator.AddAsKey(dilations);
+	key_creator.AddAsKey(padding_left);
+	key_creator.AddAsKey(padding_right);
 	return key_creator.GetKey();
   }
 };
@@ -859,10 +859,9 @@ class MklConvOp : public OpKernel {
       // in the following cases
       //   1. Legacy CPU without AVX512/AVX2, or
       //   2. 1x1 convolution with stride != 1
-      bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled() &&
-                    (src_dims[MklDnnDims::Dim_N] > kSmallBatchSize) &&
-                    (MklPrimitiveFactory<T>::IsLegacyPlatform() ||
-                     IsConv1x1StrideNot1(filter_dims, strides));
+      bool do_not_cache = IsPrimitiveMemOptEnabled() &&
+    		  (src_dims[MklDnnDims::Dim_N] > kSmallBatchSize) &&
+    		  (IsLegacyPlatform() || IsConv1x1StrideNot1(filter_dims, strides));
 
       // get a conv2d fwd from primitive pool
       std::shared_ptr<MklConvFwdPrimitive<T>> conv_fwd(nullptr);

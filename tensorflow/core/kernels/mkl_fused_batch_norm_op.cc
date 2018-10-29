@@ -699,10 +699,10 @@ struct MklBatchNormFwdParams : public MklPrimitiveParams {
     string prefix = "bn_fwd";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(fwdParams.src_dims);
-	key_creator.AddAsKey<int>(fwdParams.depth);
-	key_creator.AddAsKey<float>(fwdParams.eps);
-	key_creator.AddAsKey<bool>(fwdParams.training);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey<int>(depth);
+	key_creator.AddAsKey<float>(eps);
+	key_creator.AddAsKey<bool>(training);
 	return key_creator.GetKey();
   }
 };
@@ -902,11 +902,11 @@ struct MklBatchNormBwdParams : public MklPrimitiveParams {
     string prefix = "bn_bwd";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(bwdParams.src_dims);
-	key_creator.AddAsKey(bwdParams.diff_dst_dims);
-	key_creator.AddAsKey<int>(bwdParams.depth);
-	key_creator.AddAsKey<float>(bwdParams.eps);
-	key_creator.AddAsKey<bool>(bwdParams.training);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(diff_dst_dims);
+	key_creator.AddAsKey<int>(depth);
+	key_creator.AddAsKey<float>(eps);
+	key_creator.AddAsKey<bool>(training);
 	return key_creator.GetKey();
   }
 };
