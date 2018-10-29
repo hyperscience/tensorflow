@@ -75,14 +75,15 @@ struct MklConvBwdFilterParams : public MklPrimitiveParams {
     string prefix = "conv_bwd_filter";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(convBwdFilterDims.src_dims);
-	key_creator.AddAsKey(convBwdFilterDims.diff_filter_dims);
-	key_creator.AddAsKey(convBwdFilterDims.diff_bias_dims);
-	key_creator.AddAsKey(convBwdFilterDims.diff_dst_dims);
-	key_creator.AddAsKey(convBwdFilterDims.strides);
-	key_creator.AddAsKey(convBwdFilterDims.dilations);
-	key_creator.AddAsKey(convBwdFilterDims.padding_left);
-	key_creator.AddAsKey(convBwdFilterDims.padding_right);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(diff_filter_dims);
+	key_creator.AddAsKey(diff_bias_dims);
+	key_creator.AddAsKey(diff_dst_dims);
+	key_creator.AddAsKey(strides);
+	key_creator.AddAsKey(dilations);
+	key_creator.AddAsKey(padding_left);
+	key_creator.AddAsKey(padding_right);
+	// TODO(ivan): Is it safe to ignore the padding member for the key generation?
 	return key_creator.GetKey();
   }
 };
@@ -415,9 +416,9 @@ class MklConvCustomBackpropFilterOp
       // MKL DNN allocates large buffers when a conv gradient filter primtive is
       // created. So we don't cache conv backward primitives when the env
       // variable TF_MKL_OPTIMIZE_PRIMITIVE_MEMUSE is set to true.
-      bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled();
+      bool do_not_cache = IsPrimitiveMemOptEnabled();
       std::shared_ptr<MklConvBwdFilterPrimitive<T>> conv_bwd_filter(nullptr);
-      MklConvBwdFilterPrimitiveFactory<MklConvBwdFilterPrimitive<T>, MklConvBwdFilterParams>::Get(convBwdFilterDims, conv_bwd_filter, !do_not_cache);
+      MklPrimitiveFactory<MklConvBwdFilterPrimitive<T>, MklConvBwdFilterParams>::Get(convBwdFilterDims, conv_bwd_filter, !do_not_cache);
 
       auto bwd_filter_pd = conv_bwd_filter->GetPrimitiveDesc();
 

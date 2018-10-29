@@ -1610,9 +1610,8 @@ inline bool IsPrimitiveMemReuseEnabled() {
 
 /// Base class for the parameters of operations with reuse of primitives.
 ///
-class MklPrimitiveParams {
+struct MklPrimitiveParams {
 
-public:
 	string createKey() const;
 };
 
@@ -1622,7 +1621,7 @@ class MklPrimitive {
 
 public:
 	// Dummy data which MKL DNN never operates on
-	static const unsigned char* const DummyData = nullptr;
+	unsigned char* DummyData = nullptr;
 };
 
 /// A factory that takes care of the primitive recycling.
@@ -1662,7 +1661,7 @@ private:
 		auto& cache = GetCache();
 		auto cacheIter = cache.find(key);
 		if (cacheIter == cache.end()) {
-			primitive.reset(nullptr);
+			primitive.reset(static_cast<Primitive*>(nullptr));
 		} else {
 			CHECK(cacheIter->second != nullptr) << "nullptr present in MKL primitive cache";
 			primitive = cacheIter->second;
@@ -1673,9 +1672,9 @@ private:
 		auto& cache = GetCache();
 		auto cacheIter = cache.find(key);
 
-		CHECK(cacheIter == map.end());
+		CHECK(cacheIter == cache.end());
 
-		map[key] = primitive;
+		cache[key] = primitive;
 	}
 };
 
@@ -1726,8 +1725,8 @@ struct MklReorderParams : public MklPrimitiveParams {
     string createKey() const {
     	string prefix = "reorder";
     	FactoryKeyCreator key_creator;
-    	auto const &from_desc =  from->get_primitive_desc().desc().data;
-    	auto const &to_desc =  to->get_primitive_desc().desc().data;
+    	auto const &from_desc = from->get_primitive_desc().desc().data;
+    	auto const &to_desc = to->get_primitive_desc().desc().data;
     	memory::dims from_dims(from_desc.dims, &from_desc.dims[from_desc.ndims]);
     	memory::dims to_dims(to_desc.dims, &to_desc.dims[to_desc.ndims]);
     	key_creator.AddAsKey(prefix);
@@ -2070,7 +2069,7 @@ class MklDnnData {
       // one stream, so submit it immediately
       reorder_memory_ = new memory(op_pd);
       std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
-      FindOrCreateReorder<T>(user_memory_, reorder_memory_, reorder_primitive);
+      FindOrCreateReorder(user_memory_, reorder_memory_, reorder_primitive);
       std::vector<primitive> net;
       net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
@@ -2117,7 +2116,7 @@ class MklDnnData {
       // one stream, so submit it immediately
       reorder_memory_ = new memory(op_pd, reorder_data_handle);
       std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
-      FindOrCreateReorder<T>(user_memory_, reorder_memory_, reorder_primitive);
+      FindOrCreateReorder(user_memory_, reorder_memory_, reorder_primitive);
       std::vector<primitive> net;
       net.push_back(*reorder_primitive->GetPrimitive());
       stream(stream::kind::eager).submit(net).wait();
@@ -2199,7 +2198,7 @@ class MklDnnData {
     // primitive reuse don't allow two same reorder prim in
     // one stream, so submit it immediately
     std::shared_ptr<MklReorderPrimitive> reorder_primitive(nullptr);
-    FindOrCreateReorder<T>(reorder_memory_, user_memory_, reorder_primitive);
+    FindOrCreateReorder(reorder_memory_, user_memory_, reorder_primitive);
     std::vector<primitive> net;
     net.push_back(*reorder_primitive->GetPrimitive());
     stream(stream::kind::eager).submit(net).wait();

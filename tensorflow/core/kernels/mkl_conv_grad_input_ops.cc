@@ -76,13 +76,14 @@ struct MklConvBwdInputParams : public MklPrimitiveParams {
     string prefix = "conv_bwd_input";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(convBwdInputDims.diff_src_dims);
-	key_creator.AddAsKey(convBwdInputDims.filter_dims);
-	key_creator.AddAsKey(convBwdInputDims.diff_dst_dims);
-	key_creator.AddAsKey(convBwdInputDims.strides);
-	key_creator.AddAsKey(convBwdInputDims.dilations);
-	key_creator.AddAsKey(convBwdInputDims.padding_left);
-	key_creator.AddAsKey(convBwdInputDims.padding_right);
+	key_creator.AddAsKey(diff_src_dims);
+	key_creator.AddAsKey(filter_dims);
+	key_creator.AddAsKey(diff_dst_dims);
+	key_creator.AddAsKey(strides);
+	key_creator.AddAsKey(dilations);
+	key_creator.AddAsKey(padding_left);
+	key_creator.AddAsKey(padding_right);
+	// TODO(mavrov): Is it safe to ignore the padding member in the key function?
 	return key_creator.GetKey();
   }
 };

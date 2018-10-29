@@ -67,12 +67,12 @@ class MklEltwiseFwdParams : public MklPrimitiveParams {
     string prefix = "eltwise_fwd";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(fwdParams.src_dims);
-	key_creator.AddAsKey<int>(static_cast<int>(fwdParams.alg_kind));
-	key_creator.AddAsKey<float>(static_cast<float>(fwdParams.alpha));
-	key_creator.AddAsKey<float>(static_cast<float>(fwdParams.beta));
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey<int>(static_cast<int>(alg_kind));
+	key_creator.AddAsKey<float>(static_cast<float>(alpha));
+	key_creator.AddAsKey<float>(static_cast<float>(beta));
 	auto src_fmt = static_cast<mkldnn::memory::format>(
-			fwdParams.src_md.data.format);
+			src_md.data.format);
 	key_creator.AddAsKey<int>(static_cast<int>(src_fmt));
 	return key_creator.GetKey();
   }
@@ -208,15 +208,15 @@ class MklEltwiseBwdParams : public MklPrimitiveParams {
     string prefix = "eltwise_bwd";
 	FactoryKeyCreator key_creator;
 	key_creator.AddAsKey(prefix);
-	key_creator.AddAsKey(bwdParams.src_dims);
-	key_creator.AddAsKey(static_cast<int>(bwdParams.alg_kind));
-	key_creator.AddAsKey(static_cast<float>(bwdParams.alpha));
-	key_creator.AddAsKey(static_cast<float>(bwdParams.beta));
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(static_cast<int>(alg_kind));
+	key_creator.AddAsKey(static_cast<float>(alpha));
+	key_creator.AddAsKey(static_cast<float>(beta));
 	auto src_fmt = static_cast<mkldnn::memory::format>(
-			bwdParams.common_md.data.format);
+			common_md.data.format);
 	key_creator.AddAsKey(static_cast<int>(src_fmt));
 	auto diff_dst_fmt = static_cast<mkldnn::memory::format>(
-			bwdParams.common_md.data.format);
+			common_md.data.format);
 	key_creator.AddAsKey(static_cast<int>(diff_dst_fmt));
 	return key_creator.GetKey();
   }
@@ -853,7 +853,7 @@ class MklReluGradOpBase : public OpKernel {
         auto diff_dst_tf_data_format =
             MklDnnDataFormatToTFDataFormat(diff_dst_mkl_data_format);
 
-        src_dims = (src_tensor.dims() == 4) 
+        src_dims = (src_tensor.dims() == 4)
                  ? TFShapeToMklDnnDimsInNCHW(src_tensor.shape(),
                                              diff_dst_tf_data_format)
                  : TFShapeToMklDnnDimsInNCDHW(src_tensor.shape(),
