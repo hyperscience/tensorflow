@@ -48,7 +48,7 @@ using mkldnn::stream;
 namespace tensorflow {
 typedef Eigen::ThreadPoolDevice CPUDevice;
 
-struct MklConvBwdFilterParams {
+struct MklConvBwdFilterParams : public MklPrimitiveParams {
   memory::dims src_dims;
   memory::dims diff_filter_dims;
   memory::dims diff_bias_dims;
@@ -69,6 +69,22 @@ struct MklConvBwdFilterParams {
       strides(strides), dilations(dilations),
       padding_left(padding_left), padding_right(padding_right),
       padding(padding) {
+  }
+
+  string createKey() const {
+    string prefix = "conv_bwd_filter";
+	FactoryKeyCreator key_creator;
+	key_creator.AddAsKey(prefix);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(diff_filter_dims);
+	key_creator.AddAsKey(diff_bias_dims);
+	key_creator.AddAsKey(diff_dst_dims);
+	key_creator.AddAsKey(strides);
+	key_creator.AddAsKey(dilations);
+	key_creator.AddAsKey(padding_left);
+	key_creator.AddAsKey(padding_right);
+	// TODO(ivan): Is it safe to ignore the padding member for the key generation?
+	return key_creator.GetKey();
   }
 };
 
@@ -287,68 +303,6 @@ class MklConvBwdFilterPrimitive : public MklPrimitive {
   engine cpu_engine_;
 };
 
-template <typename T>
-class MklConvBwdFilterPrimitiveFactory : public MklPrimitiveFactory<T> {
- public:
-  static std::shared_ptr<MklConvBwdFilterPrimitive<T>> Get(
-      const MklConvBwdFilterParams& convBwdFilterDims, bool do_not_cache) {
-    std::shared_ptr<MklConvBwdFilterPrimitive<T>> conv_bwd_filter(nullptr);
-
-    if (do_not_cache) { /* Create new primitive always */
-      conv_bwd_filter.reset(new MklConvBwdFilterPrimitive<T>(convBwdFilterDims));
-    } else {
-      // look into the pool for reusable primitive
-      conv_bwd_filter = std::static_pointer_cast<MklConvBwdFilterPrimitive<T>>(
-        MklConvBwdFilterPrimitiveFactory<T>::GetInstance().GetConvBwdFilter(
-            convBwdFilterDims));
-
-     if (!conv_bwd_filter) {
-       conv_bwd_filter.reset(new MklConvBwdFilterPrimitive<T>(convBwdFilterDims));
-       MklConvBwdFilterPrimitiveFactory<T>::GetInstance().SetConvBwdFilter(
-            convBwdFilterDims, conv_bwd_filter);
-      }
-    }
-
-    return conv_bwd_filter;
-  }
-
- private:
-  MklConvBwdFilterPrimitiveFactory() {}
-  ~MklConvBwdFilterPrimitiveFactory() {}
-
-  static MklConvBwdFilterPrimitiveFactory& GetInstance() {
-    static MklConvBwdFilterPrimitiveFactory instance_;
-    return instance_;
-  }
-
-  static string CreateKey(const MklConvBwdFilterParams& convBwdFilterDims) {
-    string prefix = "conv_bwd_filter";
-    FactoryKeyCreator key_creator;
-    key_creator.AddAsKey(prefix);
-    key_creator.AddAsKey(convBwdFilterDims.src_dims);
-    key_creator.AddAsKey(convBwdFilterDims.diff_filter_dims);
-    key_creator.AddAsKey(convBwdFilterDims.diff_bias_dims);
-    key_creator.AddAsKey(convBwdFilterDims.diff_dst_dims);
-    key_creator.AddAsKey(convBwdFilterDims.strides);
-    key_creator.AddAsKey(convBwdFilterDims.dilations);
-    key_creator.AddAsKey(convBwdFilterDims.padding_left);
-    key_creator.AddAsKey(convBwdFilterDims.padding_right);
-    return key_creator.GetKey();
-  }
-
-  std::shared_ptr<MklPrimitive> GetConvBwdFilter(
-      const MklConvBwdFilterParams& convBwdFilterDims) {
-    string key = CreateKey(convBwdFilterDims);
-    return this->GetOp(key);
-  }
-
-  void SetConvBwdFilter(const MklConvBwdFilterParams& convBwdFilterDims,
-                        std::shared_ptr<MklPrimitive> op) {
-    string key = CreateKey(convBwdFilterDims);
-    this->SetOp(key, op);
-  }
-};
-
 template <typename Device, class T, bool biasEnabled>
 class MklConvCustomBackpropFilterOp
     : public MklConvBackpropCommonOp<Device, T> {
@@ -462,10 +416,10 @@ class MklConvCustomBackpropFilterOp
       // MKL DNN allocates large buffers when a conv gradient filter primtive is
       // created. So we don't cache conv backward primitives when the env
       // variable TF_MKL_OPTIMIZE_PRIMITIVE_MEMUSE is set to true.
-      bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled();
-      std::shared_ptr<MklConvBwdFilterPrimitive<T>> conv_bwd_filter =
-          MklConvBwdFilterPrimitiveFactory<T>::Get(convBwdFilterDims,
-                                                   do_not_cache);
+      bool do_not_cache = IsPrimitiveMemOptEnabled();
+      std::shared_ptr<MklConvBwdFilterPrimitive<T>> conv_bwd_filter(nullptr);
+      MklPrimitiveFactory<MklConvBwdFilterPrimitive<T>, MklConvBwdFilterParams>::Get(convBwdFilterDims, conv_bwd_filter, !do_not_cache);
+
       auto bwd_filter_pd = conv_bwd_filter->GetPrimitiveDesc();
 
       // allocate output tensors: diff_fitler and diff_bias (w bias)

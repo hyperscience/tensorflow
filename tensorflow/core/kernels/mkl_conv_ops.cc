@@ -60,7 +60,7 @@ namespace tensorflow {
 #ifndef INTEL_MKL_ML_ONLY
 
 // This structure aggregates multiple inputs to Conv2DFwd* methods.
-struct MklConvFwdParams {
+struct MklConvFwdParams : public MklPrimitiveParams {
   memory::dims src_dims;
   memory::dims filter_dims;
   memory::dims bias_dims;
@@ -82,6 +82,21 @@ struct MklConvFwdParams {
         dilations(dilations),
         padding_left(padding_left),
         padding_right(padding_right) {}
+
+  string createKey() const {
+    string prefix = "conv_fwd_";
+	FactoryKeyCreator key_creator;
+	key_creator.AddAsKey(prefix);
+	key_creator.AddAsKey(src_dims);
+	key_creator.AddAsKey(filter_dims);
+	key_creator.AddAsKey(bias_dims);
+	key_creator.AddAsKey(dst_dims);
+	key_creator.AddAsKey(strides);
+	key_creator.AddAsKey(dilations);
+	key_creator.AddAsKey(padding_left);
+	key_creator.AddAsKey(padding_right);
+	return key_creator.GetKey();
+  }
 };
 
 template <typename T>
@@ -267,67 +282,6 @@ class MklConvFwdPrimitive : public MklPrimitive {
   struct ConvFwdContext context_;
   engine cpu_engine_;
 };
-
-template <typename T>
-class MklConvFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
- public:
-  static std::shared_ptr<MklConvFwdPrimitive<T>> Get(const MklConvFwdParams& convFwdDims,
-                                     bool do_not_cache) {
-    std::shared_ptr<MklConvFwdPrimitive<T>> conv_fwd(nullptr);
-
-    if (do_not_cache) { /* Always create new primitive */
-      conv_fwd.reset(new MklConvFwdPrimitive<T>(convFwdDims));
-    } else {
-      // try to find a suitable one in pool
-      conv_fwd = std::static_pointer_cast<MklConvFwdPrimitive<T>>(
-          MklConvFwdPrimitiveFactory<T>::GetInstance().GetConvFwd(convFwdDims));
-      if (!conv_fwd) {
-        conv_fwd.reset(new MklConvFwdPrimitive<T>(convFwdDims));
-        MklConvFwdPrimitiveFactory<T>::GetInstance().SetConvFwd(convFwdDims,
-                                                                conv_fwd);
-      }
-    }
-
-    return conv_fwd;
-  }
-
- private:
-  MklConvFwdPrimitiveFactory() {}
-  ~MklConvFwdPrimitiveFactory() {}
-
-  static const int kDilationH = 0, kDilationW = 1;
-
-  static MklConvFwdPrimitiveFactory& GetInstance() {
-    static MklConvFwdPrimitiveFactory instance_;
-    return instance_;
-  }
-
-  static string CreateKey(const MklConvFwdParams& convFwdDims) {
-    string prefix = "conv_fwd_";
-    FactoryKeyCreator key_creator;
-    key_creator.AddAsKey(prefix);
-    key_creator.AddAsKey(convFwdDims.src_dims);
-    key_creator.AddAsKey(convFwdDims.filter_dims);
-    key_creator.AddAsKey(convFwdDims.bias_dims);
-    key_creator.AddAsKey(convFwdDims.dst_dims);
-    key_creator.AddAsKey(convFwdDims.strides);
-    key_creator.AddAsKey(convFwdDims.dilations);
-    key_creator.AddAsKey(convFwdDims.padding_left);
-    key_creator.AddAsKey(convFwdDims.padding_right);
-    return key_creator.GetKey();
-  }
-
-  std::shared_ptr<MklPrimitive> GetConvFwd(const MklConvFwdParams& convFwdDims) {
-    string key = CreateKey(convFwdDims);
-    return this->GetOp(key);
-  }
-
-  void SetConvFwd(const MklConvFwdParams& convFwdDims, std::shared_ptr<MklPrimitive> op) {
-    string key = CreateKey(convFwdDims);
-    this->SetOp(key, op);
-  }
-};
-
 #endif
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
@@ -905,10 +859,9 @@ class MklConvOp : public OpKernel {
       // in the following cases
       //   1. Legacy CPU without AVX512/AVX2, or
       //   2. 1x1 convolution with stride != 1
-      bool do_not_cache = MklPrimitiveFactory<T>::IsPrimitiveMemOptEnabled() &&
-                    (src_dims[MklDnnDims::Dim_N] > kSmallBatchSize) &&
-                    (MklPrimitiveFactory<T>::IsLegacyPlatform() ||
-                     IsConv1x1StrideNot1(filter_dims, strides));
+      bool do_not_cache = IsPrimitiveMemOptEnabled() &&
+    		  (src_dims[MklDnnDims::Dim_N] > kSmallBatchSize) &&
+    		  (IsLegacyPlatform() || IsConv1x1StrideNot1(filter_dims, strides));
 
       // get a conv2d fwd from primitive pool
       std::shared_ptr<MklConvFwdPrimitive<T>> conv_fwd(nullptr);
@@ -918,14 +871,12 @@ class MklConvOp : public OpKernel {
         MklConvFwdParams convFwdDims(src_dims, filter_dims, bias_dims,
                                      dst_dims_mkl_order, strides, dilations,
                                      padding_left, padding_right);
-        conv_fwd = MklConvFwdPrimitiveFactory<T>::Get(
-            convFwdDims, do_not_cache);
+        MklPrimitiveFactory<MklConvFwdPrimitive<T>, MklConvFwdParams>::Get(convFwdDims, conv_fwd, !do_not_cache);
       } else {
         MklConvFwdParams convFwdDims(src_dims, filter_dims, NONE_DIMS,
                                      dst_dims_mkl_order, strides, dilations,
                                      padding_left, padding_right);
-        conv_fwd = MklConvFwdPrimitiveFactory<T>::Get(
-            convFwdDims, do_not_cache);
+        MklPrimitiveFactory<MklConvFwdPrimitive<T>, MklConvFwdParams>::Get(convFwdDims, conv_fwd, !do_not_cache);
       }
 
       // allocate output tensors output_tensor and filter_out_tensor
