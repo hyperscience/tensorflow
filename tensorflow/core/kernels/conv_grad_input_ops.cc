@@ -1005,7 +1005,18 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
                   best_result_no_scratch.elapsed_time_in_ms()) {
             best_result_no_scratch = profile_result;
           }
-        }
+          // if (scratch_allocator.TotalByteSize() == 0) {
+          //   LOG(INFO) << "No-scratch algorithm "
+          //             << profile_result.algorithm().algo_id()
+          //             << " found!";
+          // }
+        } //else {
+        //   LOG(ERROR) << "EPIC FAIL: Profile result for algorithm "
+        //              << profile_result.algorithm().algo_id()
+        //              << " is invalid!";
+        // }
+      // } else {
+      //   LOG(ERROR) << "EPIC FAIL: CUDA did not launch correctly!";
       }
     }
     OP_REQUIRES(ctx,
@@ -1013,11 +1024,24 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
                 errors::NotFound("No algorithm worked!"));
     if (best_result.is_valid()) {
       algorithm_config.set_algorithm(best_result.algorithm());
-    }
+      // LOG(INFO) << "Fastest algorithm is "
+      //           << best_result.algorithm().algo_id()
+      //           << " with " << best_result.algorithm().scratch_size()
+      //           << " bytes";
+    } //else {
+    //   LOG(ERROR) << "EPIC FAIL: No fastest algorithm!";
+    // }
     if (best_result_no_scratch.is_valid()) {
       algorithm_config.set_algorithm_no_scratch(
           best_result_no_scratch.algorithm());
-    }
+      // LOG(INFO) << "No-scratch algorithm is "
+      //           << best_result_no_scratch.algorithm().algo_id()
+      //           << " with " << best_result_no_scratch.algorithm().scratch_size()
+      //           << " bytes";
+    } //else {
+    //   LOG(ERROR) << "EPIC FAIL: No no-scratch algorithms found!";
+    // }
+
     AutoTuneConvBwdData::GetInstance()->Insert(conv_parameters,
                                                algorithm_config);
   }
