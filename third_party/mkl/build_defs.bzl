@@ -124,7 +124,7 @@ def _mkl_autoconf_impl(repository_ctx):
     if _enable_local_mkl(repository_ctx):
         # Symlink lib and include local folders.
         mkl_root = repository_ctx.os.environ[_TF_MKL_ROOT]
-        mkl_lib_path = "%s/lib" % mkl_root
+        mkl_lib_path = "%s/lib/intel64" % mkl_root
         repository_ctx.symlink(mkl_lib_path, "lib")
         mkl_include_path = "%s/include" % mkl_root
         repository_ctx.symlink(mkl_include_path, "include")

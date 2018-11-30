@@ -25,18 +25,31 @@ cc_library(
         "-fexceptions",
         "-DUSE_MKL",
         "-DUSE_CBLAS",
+        "-DMKLDNN_DLL",
+        "-DMKLDNN_DLL_EXPORTS",
+        "-DMKLDNN_THR=MKLDNN_THR_SEQ",
+        "-D__STDC_CONSTANT_MACROS",
+        "-D__STDC_LIMIT_MACROS",
+        "-Dmkldnn_EXPORTS",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-std=c++11",
+        "-fvisibility-inlines-hidden",
+        "-Wall",
+        "-Wno-unknown-pragmas",
+        "-fvisibility=internal",
+        "-mavx",
+        "-fPIC",
+        "-Wformat",
+        "-Wformat-security",
+        "-fstack-protector-strong",
+        "-Wmissing-field-initializers",
+        "-O3",
+        "-DNDEBUG",
+        "-std=gnu++11",
     ] + if_mkl_open_source_only([
         "-UUSE_MKL",
         "-UUSE_CBLAS",
-    ]) + select({
-        "@org_tensorflow//tensorflow:linux_x86_64": [
-            "-fopenmp",  # only works with gcc
-        ],
-        # TODO(ibiryukov): enable openmp with clang by including libomp as a
-        # dependency.
-        ":clang_linux_x86_64": [],
-        "//conditions:default": [],
-    }),
+    ]),
     includes = [
         "include",
         "src",
