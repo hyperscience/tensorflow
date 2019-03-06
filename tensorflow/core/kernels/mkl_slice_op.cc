@@ -239,14 +239,17 @@ class MklSlicePrimitive : public MklPrimitive {
 template <typename T>
 class MklSlicePrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
-  static MklSlicePrimitive<T>* Get(const MklSliceParams& sliceParams) {
-    auto reorderPrim = static_cast<MklSlicePrimitive<T>*>(
+  static std::shared_ptr<MklSlicePrimitive<T>> Get(const MklSliceParams& sliceParams) {
+    std::shared_ptr<MklSlicePrimitive<T>> reorderPrim =
+      std::static_pointer_cast<MklSlicePrimitive<T>>(
         MklSlicePrimitiveFactory<T>::GetInstance().GetReorder(sliceParams));
-    if (reorderPrim == nullptr) {
-      reorderPrim = new MklSlicePrimitive<T>(sliceParams);
+
+    if (!reorderPrim) {
+      reorderPrim.reset(new MklSlicePrimitive<T>(sliceParams));
       MklSlicePrimitiveFactory<T>::GetInstance().SetReorder(sliceParams,
                                                             reorderPrim);
     }
+
     return reorderPrim;
   }
 
@@ -288,12 +291,12 @@ class MklSlicePrimitiveFactory : public MklPrimitiveFactory<T> {
     return key_creator.GetKey();
   }
 
-  MklPrimitive* GetReorder(const MklSliceParams& sliceParams) {
+  std::shared_ptr<MklPrimitive> GetReorder(const MklSliceParams& sliceParams) {
     string key = CreateKey(sliceParams);
     return this->GetOp(key);
   }
 
-  void SetReorder(const MklSliceParams& sliceParams, MklPrimitive* op) {
+  void SetReorder(const MklSliceParams& sliceParams, std::shared_ptr<MklPrimitive> op) {
     string key = CreateKey(sliceParams);
     this->SetOp(key, op);
   }
@@ -441,7 +444,7 @@ class MklSliceOp : public OpKernel {
       // Step 3 - create reorder primitive.
       MklSliceParams sliceParams(&src.GetOpMem(), output.GetUsrMem(),
                                  begin_dims, size_dims);
-      MklSlicePrimitive<T>* reorder_prim =
+      std::shared_ptr<MklSlicePrimitive<T>> reorder_prim =
           MklSlicePrimitiveFactory<T>::Get(sliceParams);
       // Execute slice reorder.
       reorder_prim->Execute(sliceParams);
