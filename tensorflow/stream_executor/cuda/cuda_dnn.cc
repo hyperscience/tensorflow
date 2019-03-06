@@ -2540,11 +2540,13 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionForwardAlgorithm(
   // Failed to allocate workspace for the first algorithm, fall back to the
   // no_scratch algorithm.
   if (!algo_desc.has_value()) {
-    return port::Status(
-        port::error::INVALID_ARGUMENT,
-        absl::StrCat("The primary convolution algorithm failed, ",
-                     "while a secondary algorithm is not provided. ",
-                     "Returned status: ", scratch_or.status().ToString()));
+    bool specify_workspace_limit = false;
+    auto memory_limit_bytes = 0ll;
+    SE_ASSIGN_OR_RETURN(cudnnConvolutionFwdAlgo_t algo,
+                        GetCudnnConvolutionForwardAlgo(
+                            cudnn, input_nd, filter, conv, output_nd,
+                            specify_workspace_limit, memory_limit_bytes));
+    algo_desc = dnn::AlgorithmDesc(algo, algo_desc->tensor_ops_enabled());
   }
 
   SE_ASSIGN_OR_RETURN(*scratch, AllocateCudnnConvolutionForwardWorkspace(
@@ -2593,10 +2595,13 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardDataAlgorithm(
   // Failed to allocate workspace for the first algorithm, fall back to the
   // no_scratch algorithm.
   if (!algo_desc.has_value()) {
-    return port::Status(
-        port::error::INVALID_ARGUMENT,
-        "The primary convolution algorithm failed memory allocation, "
-        "while a secondary algorithm is not provided.");
+    bool specify_workspace_limit = false;
+    auto memory_limit_bytes = 0ll;
+    SE_ASSIGN_OR_RETURN(cudnnConvolutionBwdDataAlgo_t algo,
+                        GetCudnnConvolutionBackwardDataAlgo(
+                            cudnn, input_nd, filter, conv, output_nd,
+                            specify_workspace_limit, memory_limit_bytes));
+    algo_desc = dnn::AlgorithmDesc(algo, algo_desc->tensor_ops_enabled());
   }
 
   SE_ASSIGN_OR_RETURN(*scratch, AllocateCudnnConvolutionBackwardDataWorkspace(
@@ -2645,10 +2650,13 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardFilterAlgorithm(
   // Failed to allocate workspace for the first algorithm, fall back to the
   // no_scratch algorithm.
   if (!algo_desc.has_value()) {
-    return port::Status(
-        port::error::INVALID_ARGUMENT,
-        "The primary convolution algorithm failed memory allocation, "
-        "while a secondary algorithm is not provided.");
+    bool specify_workspace_limit = false;
+    auto memory_limit_bytes = 0ll;
+    SE_ASSIGN_OR_RETURN(cudnnConvolutionBwdFilterAlgo_t algo,
+                        GetCudnnConvolutionBackwardFilterAlgo(
+                            cudnn, input_nd, filter, conv, output_nd,
+                            specify_workspace_limit, memory_limit_bytes));
+    algo_desc = dnn::AlgorithmDesc(algo, algo_desc->tensor_ops_enabled());
   }
 
   SE_ASSIGN_OR_RETURN(*scratch, AllocateCudnnConvolutionBackwardFilterWorkspace(
