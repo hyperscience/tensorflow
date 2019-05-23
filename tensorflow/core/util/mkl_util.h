@@ -1329,7 +1329,6 @@ class MklDnnData {
       cpu_allocator()->DeallocateRaw(allocated_buffer_);
     }
     cpu_engine_ = nullptr;  // We don't own this.
-    // TODO(mavrov): What about deallocating allocated_buffer_ ???
     delete (user_memory_);
     delete (reorder_memory_);
     delete (op_md_);
