@@ -1694,7 +1694,6 @@ class MklDnnData {
       cpu_allocator()->DeallocateRaw(allocated_buffer_);
     }
     cpu_engine_ = nullptr;  // We don't own this.
-    // TODO(mavrov): What about deallocating allocated_buffer_ ???
     delete (user_memory_);
     delete (reorder_memory_);
     delete (op_md_);
@@ -1784,6 +1783,9 @@ class MklDnnData {
   inline void SetUsrMem(const memory::primitive_desc& pd,
                         void* data_buffer = nullptr) {
     CHECK_NOTNULL(cpu_engine_);
+    if (user_memory_) {
+      delete user_memory_;
+    }
     // TODO(nhasabni): can we remove dynamic memory allocation?
     if (data_buffer) {
       user_memory_ = new memory(pd, data_buffer);
