@@ -56,6 +56,7 @@ ENV TF_CPP_MIN_LOG_LEVEL 1
 
 COPY build.sh /build.sh
 
+RUN yum install -y patch
 
 VOLUME "/tensorflow-src"
 VOLUME "/output-dir"
