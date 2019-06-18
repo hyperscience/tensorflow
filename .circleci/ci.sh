@@ -7,6 +7,7 @@ TENSORFLOW_BUILD_TAG="${TENSORFLOW_BUILD_TAG:-centos}"
 TENSORFLOW_DOCKER_BUILD_TAG="${TENSORFLOW_DOCKER_BUILD_TAG:-latest}"
 BAZEL_OUTPUT_BASE="${BAZEL_OUTPUT_BASE:-/var/tmp/bazel-output-base}"
 BUILD_CONFIG="${BUILD_CONFIG:-mkl}"
+OUTPUT_DIR="${OUTPUT_DIR:-./build}"
 
 if [[ ! -z "${BAZEL_VERSION}" ]]
 then
@@ -16,9 +17,7 @@ fi
 mkdir -p "${BAZEL_OUTPUT_BASE}"
 mkdir -p build
 
-
-
-mkdir -p "../${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
 
 if [[ -z ${TENSORFLOW_SKIP_DOCKER_BUILD} ]] ; then
     docker build \
