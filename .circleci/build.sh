@@ -26,7 +26,7 @@ mkl)
     ;;
 esac
 
-BUILD_TAG="${BUILD_TAG}.stephan"
+BUILD_TAG="${BUILD_TAG}.centos"
 
 source /opt/rh/devtoolset-8/enable
 source /opt/tensorflow_venv/bin/activate
