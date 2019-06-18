@@ -34,7 +34,8 @@ RUN source /opt/rh/devtoolset-8/enable && \
         'six >= 1.10.0' \
         'protobuf >= 3.6.1' \
         'tensorflow_estimator >= 1.13.0, < 1.14.0rc0' \
-        'termcolor >= 1.1.0'
+        'termcolor >= 1.1.0' \
+        'wheel'
 
 # Install bazel
 ARG BAZEL_VERSION=0.21.0
