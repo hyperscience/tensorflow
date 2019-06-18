@@ -9,20 +9,21 @@ RUN  yum install -y \
         centos-release-scl
 
 RUN yum install -y \
-        devtoolset-7 \
+        devtoolset-8 \
         java-1.8.0-openjdk \
         java-1.8.0-openjdk-devel \
         patch \
         python36 \
         python36-devel
 
-RUN python3.6 -m ensurepip && \
+RUN source /opt/rh/devtoolset-8/enable && \
+        python3.6 -m ensurepip && \
         ln -s /usr/local/bin/pip3 /usr/bin/pip3 && \
-        pip3 install --upgrade pip setuptools
+        pip3 install --upgrade pip setuptools && \
+        python3.6 -m venv /opt/tensorflow_venv
 
-RUN python3.6 -m venv /opt/tensorflow_venv
-
-RUN source /opt/tensorflow_venv/bin/activate && \
+RUN source /opt/rh/devtoolset-8/enable && \
+    source /opt/tensorflow_venv/bin/activate && \
     pip3 install --upgrade \
         'absl-py >= 0.1.6' \
         'astor >= 0.6.0' \

@@ -26,7 +26,7 @@ mkl)
     ;;
 esac
 
-source /opt/rh/devtoolset-7/enable
+source /opt/rh/devtoolset-8/enable
 source /opt/tensorflow_venv/bin/activate
 
 ./configure
