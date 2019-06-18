@@ -26,6 +26,8 @@ mkl)
     ;;
 esac
 
+BUILD_TAG="${BUILD_TAG}.stephan"
+
 source /opt/rh/devtoolset-8/enable
 source /opt/tensorflow_venv/bin/activate
 
