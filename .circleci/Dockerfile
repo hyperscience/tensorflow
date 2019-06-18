@@ -12,6 +12,7 @@ RUN yum install -y \
         devtoolset-7 \
         java-1.8.0-openjdk \
         java-1.8.0-openjdk-devel \
+        patch \
         python36 \
         python36-devel
 
@@ -55,8 +56,6 @@ ENV TF_SET_ANDROID_WORKSPACE false
 ENV TF_CPP_MIN_LOG_LEVEL 1
 
 COPY build.sh /build.sh
-
-RUN yum install -y patch
 
 VOLUME "/tensorflow-src"
 VOLUME "/output-dir"
