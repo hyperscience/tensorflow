@@ -62,7 +62,7 @@ REQUIRED_PACKAGES = [
     'opt_einsum >= 2.3.2',
     'six >= 1.10.0',
     'protobuf >= 3.6.1',
-    'tensorboard >= 1.15.0, < 1.16.0',
+    # 'tensorboard >= 1.15.0, < 1.16.0', removed by HyperScience
     'tensorflow-estimator == 1.15.1',
     'termcolor >= 1.1.0',
     'wrapt >= 1.11.1',
