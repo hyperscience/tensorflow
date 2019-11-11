@@ -1940,7 +1940,7 @@ class MklPrimitiveFactory {
 
  private:
   static inline LRUCache<MklPrimitive>& GetLRUCache() {
-    static const int kCapacity = 1024;  // cache capacity
+    static const int kCapacity = 32;  // cache capacity
     static thread_local LRUCache<MklPrimitive> lru_cache_(kCapacity);
     return lru_cache_;
   }
