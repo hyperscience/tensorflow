@@ -1934,7 +1934,7 @@ class MklPrimitiveFactory {
   void SetOp(const string& key, MklPrimitive* op) {
     auto& lru_cache = MklPrimitiveFactory<T>::GetLRUCache();
     lru_cache.SetOp(key, op);
-    LOG(WARNING) << "Adding to " << typename(T).name() <<  " LRU. " << lru_cache.size() << " objects in LRU.";
+    LOG(WARNING) << "Adding to " << typeid(T).name() <<  " LRU. " << lru_cache.size() << " objects in LRU.";
   }
 
   /// Function to decide whether HW has AVX512 or AVX2
