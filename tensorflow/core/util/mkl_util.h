@@ -23,6 +23,7 @@ limitations under the License.
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <typeinfo>
 
 #include "mkldnn.hpp"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -1791,8 +1792,18 @@ class MklDnnData {
 
 /// Base class for operations with reuse of primitives
 class MklPrimitive {
+  static int& num_living_objects() {
+    static thread_local int n = 0;
+    return n;
+  }
  public:
-  virtual ~MklPrimitive() {}
+  MklPrimitive() {
+    num_living_objects()++;
+  }
+  virtual ~MklPrimitive() {
+    num_living_objects()--;
+    LOG(WARNING) << "Destructing " << typeid(*this).name() << " " << num_living_objects() << " objects remain";
+  }
 
   // Dummy data which MKL DNN never operates on
   unsigned char* DummyData = nullptr;
@@ -1854,6 +1865,9 @@ class LRUCache {
     // Clean up the cache
     cache_.clear();
     lru_list_.clear();
+  }
+  int size() const {
+    return cache_.size();
   }
 
  private:
@@ -1920,6 +1934,7 @@ class MklPrimitiveFactory {
   void SetOp(const string& key, MklPrimitive* op) {
     auto& lru_cache = MklPrimitiveFactory<T>::GetLRUCache();
     lru_cache.SetOp(key, op);
+    LOG(WARNING) << "Adding to " << typename(T).name() <<  " LRU. " << lru_cache.size() << " objects in LRU.";
   }
 
   /// Function to decide whether HW has AVX512 or AVX2
@@ -1940,7 +1955,7 @@ class MklPrimitiveFactory {
 
  private:
   static inline LRUCache<MklPrimitive>& GetLRUCache() {
-    static const int kCapacity = 1024;  // cache capacity
+    static const int kCapacity = 4;  // cache capacity
     static thread_local LRUCache<MklPrimitive> lru_cache_(kCapacity);
     return lru_cache_;
   }
