@@ -260,6 +260,7 @@ class MklAvgPoolingGradOp : public MklPoolingBackwardOpBase<T> {
 
       // execute pooling op
       pooling_bwd->Execute(diff_dst_data, diff_src_data);
+      delete pooling_bwd;
     } catch (mkldnn::error& e) {
       string error_msg = "Status: " + std::to_string(e.status) +
                          ", message: " + string(e.message) + ", in file " +

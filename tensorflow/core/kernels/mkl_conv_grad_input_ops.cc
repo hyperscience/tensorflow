@@ -246,7 +246,7 @@ class MklConvBwdInputPrimitiveFactory : public MklPrimitiveFactory<T> {
       const MklConvBwdInputParams& convBwdInputDims, bool do_not_cache) {
     MklConvBwdInputPrimitive<T>* conv_bwd_input = nullptr;
 
-    if (do_not_cache) { /* Always allocate primitive */
+    if (true) { /* Always allocate primitive */
       conv_bwd_input = new MklConvBwdInputPrimitive<T>(convBwdInputDims);
     } else {
       // look into the pool for reusable primitive
@@ -416,7 +416,7 @@ class MklConvCustomBackpropInputOp
                           (MklPrimitiveFactory<T>::IsLegacyPlatform() ||
                            IsConv1x1StrideNot1(fwd_filter_dims, strides));
       conv_bwd_input = MklConvBwdInputPrimitiveFactory<T>::Get(convBwdInputDims,
-                                                               do_not_cache);
+                                                               true);
       auto bwd_input_pd = conv_bwd_input->GetPrimitiveDesc();
 
       // allocate output tensor
@@ -485,7 +485,7 @@ class MklConvCustomBackpropInputOp
       }
 
       // delete primitive since it is not cached.
-      if (do_not_cache) {
+      if (true) {
         delete conv_bwd_input;
       }
     } catch (mkldnn::error& e) {

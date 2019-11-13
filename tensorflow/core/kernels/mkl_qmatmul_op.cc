@@ -326,7 +326,7 @@ class MklDnnMatMulFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
     MklDnnMatMulFwdPrimitive<T, Tinput, Tweight, Tbias, Toutput>* matmul_fwd =
         nullptr;
 
-    if (do_not_cache) {
+    if (true) {
       // Always create new primitive
       matmul_fwd =
           new MklDnnMatMulFwdPrimitive<T, Tinput, Tweight, Tbias, Toutput>(
@@ -556,6 +556,7 @@ class MklDnnQuantizedMatMulOp : public OpKernel {
       Tbias* bias_data = this->GetBiasHandle(context, matmul_fwd_pd,
                                              bias_tensor, weight_tensor);
       matmul_fwd->Execute(src_data, weight_data, bias_data, dst_data);
+      delete matmul_fwd;
     } catch (mkldnn::error& e) {
       string error_msg = tensorflow::strings::StrCat(
           "Status: ", e.status, ", message: ", string(e.message), ", in file ",

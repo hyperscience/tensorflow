@@ -170,17 +170,21 @@ class MklEltwiseFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
       const MklEltwiseFwdParams<T>& fwdParams) {
     MklEltwiseFwdPrimitive<T>* eltwise_forward = nullptr;
 
-    auto src_fmt =
-        static_cast<mkldnn::memory::format>(fwdParams.src_md.data.format);
+    if (true) {
+        eltwise_forward = new MklEltwiseFwdPrimitive<T>(fwdParams);
+    } else {
+        auto src_fmt =
+            static_cast<mkldnn::memory::format>(fwdParams.src_md.data.format);
 
-    // Get a eltwise fwd primitive from the cached pool
-    eltwise_forward = static_cast<MklEltwiseFwdPrimitive<T>*>(
-        MklEltwiseFwdPrimitiveFactory<T>::GetInstance().GetEltwiseFwd(fwdParams,
-                                                                      src_fmt));
-    if (eltwise_forward == nullptr) {
-      eltwise_forward = new MklEltwiseFwdPrimitive<T>(fwdParams);
-      MklEltwiseFwdPrimitiveFactory<T>::GetInstance().SetEltwiseFwd(
-          fwdParams, src_fmt, eltwise_forward);
+        // Get a eltwise fwd primitive from the cached pool
+        eltwise_forward = static_cast<MklEltwiseFwdPrimitive<T>*>(
+            MklEltwiseFwdPrimitiveFactory<T>::GetInstance().GetEltwiseFwd(fwdParams,
+                                                                          src_fmt));
+        if (eltwise_forward == nullptr) {
+          eltwise_forward = new MklEltwiseFwdPrimitive<T>(fwdParams);
+          MklEltwiseFwdPrimitiveFactory<T>::GetInstance().SetEltwiseFwd(
+              fwdParams, src_fmt, eltwise_forward);
+        }
     }
     return eltwise_forward;
   }
@@ -388,20 +392,24 @@ class MklEltwiseBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
       const MklEltwiseBwdParams<T>& bwdParams) {
     MklEltwiseBwdPrimitive<T>* eltwise_backward = nullptr;
 
-    auto src_fmt =
-        static_cast<mkldnn::memory::format>(bwdParams.common_md.data.format);
-    auto diff_dst_fmt =
-        static_cast<mkldnn::memory::format>(bwdParams.common_md.data.format);
+    if (true) {
+        eltwise_backward = new MklEltwiseBwdPrimitive<T>(bwdParams);
+    } else {
+        auto src_fmt =
+            static_cast<mkldnn::memory::format>(bwdParams.common_md.data.format);
+        auto diff_dst_fmt =
+            static_cast<mkldnn::memory::format>(bwdParams.common_md.data.format);
 
-    // try to find a suitable one in pool
-    eltwise_backward = static_cast<MklEltwiseBwdPrimitive<T>*>(
-        MklEltwiseBwdPrimitiveFactory<T>::GetInstance().GetEltwiseBwd(
-            bwdParams, src_fmt, diff_dst_fmt));
+        // try to find a suitable one in pool
+        eltwise_backward = static_cast<MklEltwiseBwdPrimitive<T>*>(
+            MklEltwiseBwdPrimitiveFactory<T>::GetInstance().GetEltwiseBwd(
+                bwdParams, src_fmt, diff_dst_fmt));
 
-    if (eltwise_backward == nullptr) {
-      eltwise_backward = new MklEltwiseBwdPrimitive<T>(bwdParams);
-      MklEltwiseBwdPrimitiveFactory<T>::GetInstance().SetEltwiseBwd(
-          bwdParams, src_fmt, diff_dst_fmt, eltwise_backward);
+        if (eltwise_backward == nullptr) {
+          eltwise_backward = new MklEltwiseBwdPrimitive<T>(bwdParams);
+          MklEltwiseBwdPrimitiveFactory<T>::GetInstance().SetEltwiseBwd(
+              bwdParams, src_fmt, diff_dst_fmt, eltwise_backward);
+        }
     }
     return eltwise_backward;
   }
@@ -538,6 +546,7 @@ class MklReluOpBase : public OpKernel {
 
       // execute eltwise
       eltwise_fwd->Execute(src_data, dst_data);
+      delete eltwise_fwd;
     } catch (mkldnn::error& e) {
       string error_msg = "Status: " + std::to_string(e.status) +
                          ", message: " + string(e.message) + ", in file " +
@@ -715,6 +724,7 @@ class MklReluGradOpBase : public OpKernel {
 
       // execute eltwise bwd
       eltwise_bwd->Execute(src_data, diff_dst_data, diff_src_data);
+      delete eltwise_bwd;
     } catch (mkldnn::error& e) {
       string error_msg = "Status: " + std::to_string(e.status) +
                          ", message: " + string(e.message) + ", in file " +

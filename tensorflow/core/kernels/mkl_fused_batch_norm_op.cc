@@ -224,14 +224,19 @@ class MklFusedBatchNormFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklFusedBatchNormFwdPrimitive<T, U>* Get(
       const MklBatchNormFwdParams& fwdParams) {
-    auto bn_fwd = static_cast<MklFusedBatchNormFwdPrimitive<T, U>*>(
-        MklFusedBatchNormFwdPrimitiveFactory<T, U>::GetInstance()
-            .GetBatchNormFwd(fwdParams));
+    MklFusedBatchNormFwdPrimitive<T, U>* bn_fwd = nullptr;
+    if (true) {
+        bn_fwd = new MklFusedBatchNormFwdPrimitive<T, U>(fwdParams);
+    } else {
+        bn_fwd = static_cast<MklFusedBatchNormFwdPrimitive<T, U>*>(
+            MklFusedBatchNormFwdPrimitiveFactory<T, U>::GetInstance()
+                .GetBatchNormFwd(fwdParams));
 
-    if (bn_fwd == nullptr) {
-      bn_fwd = new MklFusedBatchNormFwdPrimitive<T, U>(fwdParams);
-      MklFusedBatchNormFwdPrimitiveFactory<T, U>::GetInstance().SetBatchNormFwd(
-          fwdParams, bn_fwd);
+        if (bn_fwd == nullptr) {
+          bn_fwd = new MklFusedBatchNormFwdPrimitive<T, U>(fwdParams);
+          MklFusedBatchNormFwdPrimitiveFactory<T, U>::GetInstance().SetBatchNormFwd(
+              fwdParams, bn_fwd);
+        }
     }
     return bn_fwd;
   }
@@ -455,13 +460,18 @@ class MklFusedBatchNormBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklFusedBatchNormBwdPrimitive<T, U>* Get(
       const MklBatchNormBwdParams& bwdParams) {
-    auto bn_bwd = static_cast<MklFusedBatchNormBwdPrimitive<T, U>*>(
-        MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance()
-            .GetBatchNormBwd(bwdParams));
-    if (bn_bwd == nullptr) {
-      bn_bwd = new MklFusedBatchNormBwdPrimitive<T, U>(bwdParams);
-      MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance().SetBatchNormBwd(
-          bwdParams, bn_bwd);
+    MklFusedBatchNormBwdPrimitive<T, U>* bn_bwd = nullptr; 
+    if (true) {
+        bn_bwd = new MklFusedBatchNormBwd(bwdParams);
+    } else {
+        bn_bwd = static_cast<MklFusedBatchNormBwdPrimitive<T, U>*>(
+            MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance()
+                .GetBatchNormBwd(bwdParams));
+        if (bn_bwd == nullptr) {
+          bn_bwd = new MklFusedBatchNormBwdPrimitive<T, U>(bwdParams);
+          MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance().SetBatchNormBwd(
+              bwdParams, bn_bwd);
+        }
     }
     return bn_bwd;
   }
@@ -693,6 +703,7 @@ class MklFusedBatchNormOp : public OpKernel {
       // execution
       bn_fwd->Execute(src_data, weights_op_data, dst_data, mean_op_data,
                       variance_op_data);
+      delete bn_fwd;
 
       // copy batch_mean data
       U* batch_mean_data_tf = batch_mean_tensor->flat<U>().data();
@@ -1061,6 +1072,7 @@ class MklFusedBatchNormGradOp : public OpKernel {
       bn_bwd->Execute(src_data, mean_data, variance_data, diff_dst_data,
                       weights_data, diff_src_data, diff_weights_data,
                       res_space_data);
+      delete bn_bwd;
 
       // allocate output TF tensors: diff_scale and diff_shift
       Tensor* diff_scale_tensor = nullptr;
