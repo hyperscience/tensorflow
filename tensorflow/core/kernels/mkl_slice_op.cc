@@ -240,7 +240,7 @@ template <typename T>
 class MklSlicePrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklSlicePrimitive<T>* Get(const MklSliceParams& sliceParams) {
-    MklSlicePrimitive<T>* reorderPrim = nullptr;
+        MklSlicePrimitive<T>* reorderPrim = nullptr
     if (true) {
         reorderPrim = new MklSlicePrimitive<T>(sliceParams);
     } else {
