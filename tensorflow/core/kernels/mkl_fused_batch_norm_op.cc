@@ -460,9 +460,9 @@ class MklFusedBatchNormBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklFusedBatchNormBwdPrimitive<T, U>* Get(
       const MklBatchNormBwdParams& bwdParams) {
-    MklFusedBatchNormBwdPrimitive<T, U>* bn_bwd = nullptr; 
+    MklFusedBatchNormBwdPrimitive<T, U>* bn_bwd = nullptr;
     if (true) {
-        bn_bwd = new MklFusedBatchNormBwd(bwdParams);
+        bn_bwd = new MklFusedBatchNormBwdPrimitive<T, U>(bwdParams);
     } else {
         bn_bwd = static_cast<MklFusedBatchNormBwdPrimitive<T, U>*>(
             MklFusedBatchNormBwdPrimitiveFactory<T, U>::GetInstance()
