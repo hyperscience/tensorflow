@@ -150,19 +150,16 @@ class MklPoolingFwdPrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklPoolingFwdPrimitive<T>* Get(const MklPoolingParams& fwdParams) {
     MklPoolingFwdPrimitive<T>* pooling_forward = nullptr;
-    if (true) {
-        pooling_forward = new MklPoolingFwdPrimitive<T>(fwdParams);
-    } else {
-        // Get pooling primitive from the pool
-        pooling_forward = static_cast<MklPoolingFwdPrimitive<T>*>(
-            MklPoolingFwdPrimitiveFactory<T>::GetInstance().GetPoolingFwd(
-                fwdParams));
 
-        if (pooling_forward == nullptr) {
-          pooling_forward = new MklPoolingFwdPrimitive<T>(fwdParams);
-          MklPoolingFwdPrimitiveFactory<T>::GetInstance().SetPoolingFwd(
-              fwdParams, pooling_forward);
-        }
+    // Get pooling primitive from the pool
+    pooling_forward = static_cast<MklPoolingFwdPrimitive<T>*>(
+        MklPoolingFwdPrimitiveFactory<T>::GetInstance().GetPoolingFwd(
+            fwdParams));
+
+    if (pooling_forward == nullptr) {
+      pooling_forward = new MklPoolingFwdPrimitive<T>(fwdParams);
+      MklPoolingFwdPrimitiveFactory<T>::GetInstance().SetPoolingFwd(
+          fwdParams, pooling_forward);
     }
     return pooling_forward;
   }
@@ -305,19 +302,16 @@ class MklPoolingBwdPrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklPoolingBwdPrimitive<T>* Get(const MklPoolingParams& bwdParams) {
     MklPoolingBwdPrimitive<T>* pooling_backward = nullptr;
-    if (true) {
-        pooling_backward = new MklPoolingBwdPrimitive<T>(bwdParams);
-    } else {
-        // Find a pooling backward primitive from the pool
-        // If it does not exist, create a new one
-        pooling_backward = static_cast<MklPoolingBwdPrimitive<T>*>(
-            MklPoolingBwdPrimitiveFactory<T>::GetInstance().GetPoolingBwd(
-                bwdParams));
-        if (pooling_backward == nullptr) {
-          pooling_backward = new MklPoolingBwdPrimitive<T>(bwdParams);
-          MklPoolingBwdPrimitiveFactory<T>::GetInstance().SetPoolingBwd(
-              bwdParams, pooling_backward);
-        }
+
+    // Find a pooling backward primitive from the pool
+    // If it does not exist, create a new one
+    pooling_backward = static_cast<MklPoolingBwdPrimitive<T>*>(
+        MklPoolingBwdPrimitiveFactory<T>::GetInstance().GetPoolingBwd(
+            bwdParams));
+    if (pooling_backward == nullptr) {
+      pooling_backward = new MklPoolingBwdPrimitive<T>(bwdParams);
+      MklPoolingBwdPrimitiveFactory<T>::GetInstance().SetPoolingBwd(
+          bwdParams, pooling_backward);
     }
     return pooling_backward;
   }

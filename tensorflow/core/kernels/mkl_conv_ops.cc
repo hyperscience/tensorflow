@@ -436,7 +436,7 @@ class MklConvFwdPrimitiveFactory : public MklPrimitiveFactory<float> {
       const MklConvFwdParams& convFwdDims, bool do_not_cache) {
     MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>* conv_fwd = nullptr;
 
-    if (true) {
+    if (do_not_cache) {
       // Always create a new primitive
       conv_fwd =
           new MklConvFwdPrimitive<Tinput, Tfilter, Tbias, Toutput>(convFwdDims);
@@ -758,7 +758,7 @@ class MklConvOp : public OpKernel {
 
       conv_fwd =
           MklConvFwdPrimitiveFactory<Tinput, Tfilter, Tbias, Ttemp_output>::Get(
-              convFwdDims, true);
+              convFwdDims, do_not_cache);
 
       // Allocate output tensors `output_tensor` and `filter_out_tensor`
       MklDnnShape output_mkl_shape;
@@ -861,7 +861,7 @@ class MklConvOp : public OpKernel {
       }
 
       // Delete primitive since it is not cached.
-      if (true) delete conv_fwd;
+      if (do_not_cache) delete conv_fwd;
     } catch (mkldnn::error& e) {
       string error_msg = tensorflow::strings::StrCat(
           "Status: ", e.status, ", message: ", string(e.message), ", in file ",

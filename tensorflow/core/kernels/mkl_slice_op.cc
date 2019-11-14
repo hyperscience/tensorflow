@@ -240,17 +240,12 @@ template <typename T>
 class MklSlicePrimitiveFactory : public MklPrimitiveFactory<T> {
  public:
   static MklSlicePrimitive<T>* Get(const MklSliceParams& sliceParams) {
-        MklSlicePrimitive<T>* reorderPrim = nullptr
-    if (true) {
-        reorderPrim = new MklSlicePrimitive<T>(sliceParams);
-    } else {
-        auto reorderPrim = static_cast<MklSlicePrimitive<T>*>(
-            MklSlicePrimitiveFactory<T>::GetInstance().GetReorder(sliceParams));
-        if (reorderPrim == nullptr) {
-          reorderPrim = new MklSlicePrimitive<T>(sliceParams);
-          MklSlicePrimitiveFactory<T>::GetInstance().SetReorder(sliceParams,
-                                                                reorderPrim);
-        }
+    auto reorderPrim = static_cast<MklSlicePrimitive<T>*>(
+        MklSlicePrimitiveFactory<T>::GetInstance().GetReorder(sliceParams));
+    if (reorderPrim == nullptr) {
+      reorderPrim = new MklSlicePrimitive<T>(sliceParams);
+      MklSlicePrimitiveFactory<T>::GetInstance().SetReorder(sliceParams,
+                                                            reorderPrim);
     }
     return reorderPrim;
   }
@@ -450,7 +445,6 @@ class MklSliceOp : public OpKernel {
           MklSlicePrimitiveFactory<T>::Get(sliceParams);
       // Execute slice reorder.
       reorder_prim->Execute(sliceParams);
-      delete reorder_prim;
     } catch (mkldnn::error& e) {
       string error_msg = "Status: " + std::to_string(e.status) + ", message: " +
                          string(e.message) + ", in file " + string(__FILE__) +
