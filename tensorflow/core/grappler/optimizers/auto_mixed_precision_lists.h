@@ -56,6 +56,7 @@ class AutoMixedPrecisionLists {
         &to_remove));
 
     auto list = gtl::FlatSet<string> {
+          "HsBlockLstm",
           "BlockLSTM", "BlockLSTMGrad", "Conv2D", "Conv2DBackpropFilter",
           "Conv2DBackpropInput",
           // TODO(benbarsdell): Enable these when Tensor Core kernels are
